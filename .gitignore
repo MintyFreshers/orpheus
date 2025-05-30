@@ -369,3 +369,5 @@ test:.cs
 
 # App settings
 appsettings.json
+/aiprompt.txt
+/maketasks.ps1

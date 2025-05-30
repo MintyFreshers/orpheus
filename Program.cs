@@ -3,32 +3,35 @@ using Microsoft.Extensions.Hosting;
 using NetCord.Hosting.Gateway;
 using NetCord.Hosting.Services;
 using NetCord.Hosting.Services.ApplicationCommands;
-using System.Diagnostics;
+using Orpheus;
 
 internal class Program
 {
     private static async Task Main(string[] args)
     {
-        var configuration = new ConfigurationBuilder()
+        var configuration = BuildConfiguration();
+        var token = DiscordTokenProvider.ResolveToken(configuration, out var tokenSource);
+
+        Console.WriteLine($"[Startup] Using Discord token from {tokenSource}: {DiscordTokenProvider.MaskToken(token)}");
+
+        var host = CreateHostBuilder(args, token).Build();
+
+        RegisterModules(host);
+
+        await host.RunAsync();
+    }
+
+    private static IConfiguration BuildConfiguration()
+    {
+        return new ConfigurationBuilder()
             .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
             .AddEnvironmentVariables()
             .Build();
+    }
 
-        Debug.WriteLine("Loaded configuration sources:");
-        foreach (var provider in ((IConfigurationRoot)configuration).Providers)
-        {
-            Debug.WriteLine(provider.ToString());
-        }
-        Debug.WriteLine($"Discord:Token from config: {configuration["Discord:Token"]}");
-        Debug.WriteLine($"DISCORD_TOKEN from env: {configuration["DISCORD_TOKEN"]}");
-
-        var token = configuration["DISCORD_TOKEN"] ?? configuration["Discord:Token"];
-        if (string.IsNullOrWhiteSpace(token))
-        {
-            throw new InvalidOperationException("Discord token is missing. Set DISCORD_TOKEN env variable or Discord:Token in appsettings.json.");
-        }
-
-        var builder = Host.CreateDefaultBuilder(args)
+    private static IHostBuilder CreateHostBuilder(string[] args, string token)
+    {
+        return Host.CreateDefaultBuilder(args)
             .ConfigureAppConfiguration((hostingContext, configBuilder) =>
             {
                 configBuilder.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
@@ -39,12 +42,11 @@ internal class Program
                 options.Token = token;
             })
             .UseApplicationCommands();
+    }
 
-        var host = builder.Build();
-
+    private static void RegisterModules(IHost host)
+    {
         host.AddModules(typeof(Program).Assembly);
         host.UseGatewayEventHandlers();
-
-        await host.RunAsync();
     }
 }
