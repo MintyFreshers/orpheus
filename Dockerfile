@@ -24,6 +24,27 @@ RUN dotnet publish "./Orpheus.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p
 # This stage is used in production or when running from VS in regular mode (Default when not using the Debug configuration)
 FROM base AS final
 WORKDIR /app
+
+# Switch to root to install python3, ffmpeg, and latest yt-dlp via pip
+USER root
+RUN apt-get update 
+RUN apt-get install -y python3 python3-pip ffmpeg python3-venv 
+RUN apt-get clean 
+RUN rm -rf /var/lib/apt/lists/*
+
+# Create a virtual environment for yt-dlp
+RUN python3 -m venv /opt/yt-dlp-venv
+
+# Install yt-dlp into the virtual environment using its specific pip
+RUN /opt/yt-dlp-venv/bin/pip install -U "yt-dlp[default]"
+
+# Add the virtual environment's bin directory to the PATH
+# This makes yt-dlp accessible to the application run by the ENTRYPOINT
+ENV PATH="/opt/yt-dlp-venv/bin:$PATH"
+
+# Switch back to app user
+USER $APP_UID
+
 COPY --from=publish /app/publish .
 ENTRYPOINT ["dotnet", "Orpheus.dll"]
 

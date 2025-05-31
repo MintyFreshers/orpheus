@@ -15,6 +15,7 @@
     <PackageReference Include="NetCord" Version="1.0.0-alpha.380" />
     <PackageReference Include="NetCord.Hosting" Version="1.0.0-alpha.380" />
     <PackageReference Include="NetCord.Hosting.Services" Version="1.0.0-alpha.380" />
+    <PackageReference Include="YoutubeDLSharp" Version="1.1.2" />
   </ItemGroup>
 
   <ItemGroup>

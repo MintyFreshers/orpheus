@@ -1,9 +1,13 @@
 ﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using NetCord.Hosting.Gateway;
 using NetCord.Hosting.Services;
 using NetCord.Hosting.Services.ApplicationCommands;
 using Orpheus;
+using Orpheus.Services;
+using Orpheus.Services.Downloader.Youtube;
 
 internal class Program
 {
@@ -36,6 +40,19 @@ internal class Program
             {
                 configBuilder.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
                 configBuilder.AddEnvironmentVariables();
+            })
+            .ConfigureLogging(logging =>
+            {
+                logging.ClearProviders();
+                logging.AddConsole();
+#if DEBUG
+                logging.SetMinimumLevel(LogLevel.Debug);
+#endif
+            })
+            .ConfigureServices((context, services) =>
+            {
+                services.AddLogging();
+                services.AddSingleton<IYouTubeDownloader, YouTubeDownloaderService>();
             })
             .UseDiscordGateway(options =>
             {

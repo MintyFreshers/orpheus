@@ -15,3 +15,7 @@
   - `appsettings.json` is present in the output directory (e.g., `bin/Debug/net9.0/`)
   - The JSON is valid and the token is set
   - The environment variable is set if you prefer that method
+
+## Dependencies
+
+- `yt-dlp` and `ffmpeg` are installed automatically in the Docker image. You do not need to manage or download these binaries in your application code.
