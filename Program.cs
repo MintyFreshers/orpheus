@@ -5,9 +5,9 @@ using Microsoft.Extensions.Logging;
 using NetCord.Hosting.Gateway;
 using NetCord.Hosting.Services;
 using NetCord.Hosting.Services.ApplicationCommands;
-using Orpheus;
-using Orpheus.Services;
 using Orpheus.Services.Downloader.Youtube;
+using Orpheus.Services.VoiceClientController;
+using Orpheus.Utils;
 
 internal class Program
 {
@@ -15,13 +15,9 @@ internal class Program
     {
         var configuration = BuildConfiguration();
         var token = DiscordTokenProvider.ResolveToken(configuration, out var tokenSource);
-
         Console.WriteLine($"[Startup] Using Discord token from {tokenSource}: {DiscordTokenProvider.MaskToken(token)}");
-
         var host = CreateHostBuilder(args, token).Build();
-
         RegisterModules(host);
-
         await host.RunAsync();
     }
 
@@ -53,6 +49,7 @@ internal class Program
             {
                 services.AddLogging();
                 services.AddSingleton<IYouTubeDownloader, YouTubeDownloaderService>();
+                services.AddSingleton<IVoiceClientController, VoiceClientController>();
             })
             .UseDiscordGateway(options =>
             {
