@@ -28,7 +28,7 @@ internal class Program
     private static IConfiguration BuildConfiguration()
     {
         return new ConfigurationBuilder()
-            .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
+            .AddJsonFile("Config/appsettings.json", optional: true, reloadOnChange: true)
             .AddEnvironmentVariables()
             .Build();
     }
