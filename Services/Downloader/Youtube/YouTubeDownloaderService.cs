@@ -9,11 +9,14 @@ public class YouTubeDownloaderService : IYouTubeDownloader
     private readonly YoutubeDL _ytdl;
     private readonly ILogger<YouTubeDownloaderService> _logger;
 
-    public YouTubeDownloaderService(ILogger<YouTubeDownloaderService> logger)
+    public YouTubeDownloaderService(
+        ILogger<YouTubeDownloaderService> logger,
+        ILogger<VerboseYoutubeDL> verboseLogger
+    )
     {
         _logger = logger;
 #if DEBUG
-        _ytdl = new VerboseYoutubeDL(msg => _logger.LogInformation(msg));
+        _ytdl = new VerboseYoutubeDL(verboseLogger);
         _logger.LogDebug("Using VerboseYoutubeDL (DEBUG build)");
 #else
         _ytdl = new YoutubeDL();

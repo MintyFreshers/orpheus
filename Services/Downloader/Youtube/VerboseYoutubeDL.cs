@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using YoutubeDLSharp;
 using YoutubeDLSharp.Options;
 
@@ -5,11 +6,11 @@ namespace Orpheus.Services.Downloader.Youtube;
 
 public class VerboseYoutubeDL : YoutubeDL
 {
-    public Action<string> Log { get; set; }
+    private readonly ILogger<VerboseYoutubeDL> _logger;
 
-    public VerboseYoutubeDL(Action<string> log = null)
+    public VerboseYoutubeDL(ILogger<VerboseYoutubeDL> logger)
     {
-        Log = log;
+        _logger = logger;
     }
 
     public async Task<RunResult<string>> RunAudioDownloadVerbose(
@@ -17,19 +18,19 @@ public class VerboseYoutubeDL : YoutubeDL
         AudioConversionFormat format = AudioConversionFormat.Best,
         CancellationToken ct = default)
     {
-        Log?.Invoke($"[YoutubeDL] Starting audio download for URL: {url}");
+        _logger.LogInformation("[YoutubeDL] Starting audio download for URL: {Url}", url);
 
         var result = await this.RunAudioDownload(url, format, ct);
 
-        Log?.Invoke($"[YoutubeDL] yt-dlp exited with code {(result.Success ? 0 : 1)}");
+        _logger.LogInformation("[YoutubeDL] yt-dlp exited with code {Code}", result.Success ? 0 : 1);
         if (result.ErrorOutput != null && result.ErrorOutput.Length > 0)
         {
             foreach (var err in result.ErrorOutput)
-                Log?.Invoke($"[YoutubeDL] yt-dlp error: {err}");
+                _logger.LogError("[YoutubeDL] yt-dlp error: {Error}", err);
         }
         if (!string.IsNullOrWhiteSpace(result.Data))
         {
-            Log?.Invoke($"[YoutubeDL] Downloaded file: {result.Data}");
+            _logger.LogInformation("[YoutubeDL] Downloaded file: {File}", result.Data);
         }
         return result;
     }
