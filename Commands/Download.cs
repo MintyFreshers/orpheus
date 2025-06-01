@@ -1,5 +1,5 @@
 using NetCord.Services.ApplicationCommands;
-using Orpheus.Services;
+using Orpheus.Services.Downloader.Youtube;
 
 namespace Orpheus.Commands;
 

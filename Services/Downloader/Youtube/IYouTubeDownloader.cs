@@ -1,4 +1,4 @@
-namespace Orpheus.Services;
+namespace Orpheus.Services.Downloader.Youtube;
 
 public interface IYouTubeDownloader
 {

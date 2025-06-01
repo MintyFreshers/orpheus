@@ -20,13 +20,15 @@ public class VerboseYoutubeDL : YoutubeDL
     {
         _logger.LogInformation("[YoutubeDL] Starting audio download for URL: {Url}", url);
 
-        var result = await this.RunAudioDownload(url, format, ct);
+        var result = await RunAudioDownload(url, format, ct);
 
         _logger.LogInformation("[YoutubeDL] yt-dlp exited with code {Code}", result.Success ? 0 : 1);
         if (result.ErrorOutput != null && result.ErrorOutput.Length > 0)
         {
             foreach (var err in result.ErrorOutput)
+            {
                 _logger.LogError("[YoutubeDL] yt-dlp error: {Error}", err);
+            }
         }
         if (!string.IsNullOrWhiteSpace(result.Data))
         {

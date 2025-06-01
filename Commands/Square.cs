@@ -4,6 +4,9 @@ namespace Orpheus.Commands;
 
 public class Square : ApplicationCommandModule<ApplicationCommandContext>
 {
-    [SlashCommand("square", "Get the square")]
-    public static string Command(int num) => $"{num}² = {num * num}";
+    [SlashCommand("square", "Get the square of a number")]
+    public static string Command(int number)
+    {
+        return $"{number}Â² = {number * number}";
+    }
 }
