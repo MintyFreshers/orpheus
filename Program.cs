@@ -49,6 +49,7 @@ internal class Program
             {
                 services.AddLogging();
                 services.AddSingleton<IYouTubeDownloader, YouTubeDownloaderService>();
+                services.AddSingleton<IAudioPlaybackService, AudioPlaybackService>();
                 services.AddSingleton<IVoiceClientController, VoiceClientController>();
             })
             .UseDiscordGateway(options =>
