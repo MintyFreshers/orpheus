@@ -20,7 +20,25 @@ public class VerboseYoutubeDL : YoutubeDL
     {
         _logger.LogInformation("[YoutubeDL] Starting audio download for URL: {Url}", url);
 
+        try
+        {
+            var proc = System.Diagnostics.Process.GetCurrentProcess();
+            var cpuTime = proc.TotalProcessorTime;
+            var mem = proc.WorkingSet64 / (1024 * 1024);
+            _logger.LogDebug("[Perf] Before yt-dlp: CPU Time={CpuTime}ms, Memory={MemoryMB}MB", cpuTime.TotalMilliseconds, mem);
+        }
+        catch { }
+
         var result = await RunAudioDownload(url, format, ct);
+
+        try
+        {
+            var proc = System.Diagnostics.Process.GetCurrentProcess();
+            var cpuTime = proc.TotalProcessorTime;
+            var mem = proc.WorkingSet64 / (1024 * 1024);
+            _logger.LogDebug("[Perf] After yt-dlp: CPU Time={CpuTime}ms, Memory={MemoryMB}MB", cpuTime.TotalMilliseconds, mem);
+        }
+        catch { }
 
         _logger.LogInformation("[YoutubeDL] yt-dlp exited with code {Code}", result.Success ? 0 : 1);
         if (result.ErrorOutput != null && result.ErrorOutput.Length > 0)

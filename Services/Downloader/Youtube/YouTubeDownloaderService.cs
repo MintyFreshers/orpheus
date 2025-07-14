@@ -24,11 +24,17 @@ public class YouTubeDownloaderService : IYouTubeDownloader
         LogBinaryPaths();
     }
 
-    public async Task<string> DownloadAsync(string url)
+    public async Task<string?> DownloadAsync(string url)
     {
         _logger.LogInformation("Starting download for URL: {Url}", url);
         var result = await _youtubeDl.RunAudioDownload(url, AudioConversionFormat.Mp3);
-        return GetDownloadResultMessage(result, url);
+
+        if (result.Success && !string.IsNullOrWhiteSpace(result.Data) && File.Exists(result.Data))
+        {
+            return Path.GetFullPath(result.Data);
+        }
+
+        return null;
     }
 
     private void LogBinaryPaths()
