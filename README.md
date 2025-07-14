@@ -16,6 +16,17 @@
   - The JSON is valid and the token is set
   - The environment variable is set if you prefer that method
 
+## Troubleshooting Audio Playback Consistency
+
+- If you experience audio speeding up, slowing down, or cutting out:
+  - Ensure your server/container has enough CPU and memory available.
+  - Avoid running downloads or other heavy operations at the same time as playback.
+  - The bot now logs resource usage before and after playback and downloads; check logs for `[Perf]` entries to diagnose bottlenecks.
+  - If running in Docker, consider increasing CPU/memory limits.
+  - Network or disk I/O contention can also affect playback quality.
+
+- If issues persist, try running the bot on a less-loaded machine or VM.
+
 ## Dependencies
 
 - `yt-dlp` and `ffmpeg` are installed automatically in the Docker image. You do not need to manage or download these binaries in your application code.
