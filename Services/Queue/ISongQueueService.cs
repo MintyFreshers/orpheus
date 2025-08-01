@@ -8,6 +8,11 @@ public interface ISongQueueService
     void EnqueueSong(QueuedSong song);
 
     /// <summary>
+    /// Adds a song to the front of the queue (next to play)
+    /// </summary>
+    void EnqueueSongNext(QueuedSong song);
+
+    /// <summary>
     /// Gets the next song from the queue without removing it
     /// </summary>
     QueuedSong? PeekNext();

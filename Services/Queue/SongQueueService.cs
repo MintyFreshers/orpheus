@@ -4,7 +4,7 @@ namespace Orpheus.Services.Queue;
 
 public class SongQueueService : ISongQueueService
 {
-    private readonly Queue<QueuedSong> _queue = new();
+    private readonly LinkedList<QueuedSong> _queue = new();
     private readonly object _lock = new();
     private readonly ILogger<SongQueueService> _logger;
     private QueuedSong? _currentSong;
@@ -51,8 +51,18 @@ public class SongQueueService : ISongQueueService
     {
         lock (_lock)
         {
-            _queue.Enqueue(song);
+            _queue.AddLast(song);
             _logger.LogInformation("Song queued: {Title} (requested by {UserId}). Queue size: {QueueSize}", 
+                song.Title, song.RequestedByUserId, _queue.Count);
+        }
+    }
+
+    public void EnqueueSongNext(QueuedSong song)
+    {
+        lock (_lock)
+        {
+            _queue.AddFirst(song);
+            _logger.LogInformation("Song queued next: {Title} (requested by {UserId}). Queue size: {QueueSize}", 
                 song.Title, song.RequestedByUserId, _queue.Count);
         }
     }
@@ -61,7 +71,7 @@ public class SongQueueService : ISongQueueService
     {
         lock (_lock)
         {
-            return _queue.Count > 0 ? _queue.Peek() : null;
+            return _queue.Count > 0 ? _queue.First!.Value : null;
         }
     }
 
@@ -74,7 +84,8 @@ public class SongQueueService : ISongQueueService
                 return null;
             }
 
-            var song = _queue.Dequeue();
+            var song = _queue.First!.Value;
+            _queue.RemoveFirst();
             _logger.LogInformation("Song dequeued: {Title}. Remaining queue size: {QueueSize}", 
                 song.Title, _queue.Count);
             return song;
