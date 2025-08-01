@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -6,6 +6,7 @@ using NetCord.Hosting.Gateway;
 using NetCord.Hosting.Services;
 using NetCord.Hosting.Services.ApplicationCommands;
 using Orpheus.Configuration;
+using Orpheus.Services;
 using Orpheus.Services.Downloader.Youtube;
 using Orpheus.Services.Queue;
 using Orpheus.Services.VoiceClientController;
@@ -70,6 +71,7 @@ internal class Program
         services.AddSingleton<IWakeWordDetectionService, PicovoiceWakeWordService>();
         services.AddSingleton<BotConfiguration>();
         services.AddSingleton<WakeWordResponseHandler>();
+        services.AddSingleton<IFollowUpMessageService, FollowUpMessageService>();
     }
 
     private static void RegisterModules(IHost host)

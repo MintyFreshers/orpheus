@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using NetCord;
 using NetCord.Rest;
 using NetCord.Services.ApplicationCommands;
+using Orpheus.Services;
 using Orpheus.Services.Queue;
 using Orpheus.Services.Downloader.Youtube;
 
@@ -12,17 +13,20 @@ public class Play : ApplicationCommandModule<ApplicationCommandContext>
     private readonly ISongQueueService _queueService;
     private readonly IQueuePlaybackService _queuePlaybackService;
     private readonly IYouTubeDownloader _downloader;
+    private readonly IFollowUpMessageService _followUpMessageService;
     private readonly ILogger<Play> _logger;
 
     public Play(
         ISongQueueService queueService,
         IQueuePlaybackService queuePlaybackService,
         IYouTubeDownloader downloader,
+        IFollowUpMessageService followUpMessageService,
         ILogger<Play> logger)
     {
         _queueService = queueService;
         _queuePlaybackService = queuePlaybackService;
         _downloader = downloader;
+        _followUpMessageService = followUpMessageService;
         _logger = logger;
     }
 
@@ -53,6 +57,9 @@ public class Play : ApplicationCommandModule<ApplicationCommandContext>
                 : $"Added **{placeholderTitle}** to queue (position {queuePosition})";
 
             await RespondAsync(InteractionCallback.Message(message));
+
+            // Register for follow-up messages when real title is fetched
+            await _followUpMessageService.RegisterInteractionForSongUpdatesAsync(Context.Interaction.Id, Context.Interaction, queuedSong.Id);
 
             // Auto-start queue processing if queue was empty (first song added)
             if (wasQueueEmpty || !_queuePlaybackService.IsProcessing)

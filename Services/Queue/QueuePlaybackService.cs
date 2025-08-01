@@ -111,9 +111,7 @@ public class QueuePlaybackService : IQueuePlaybackService
                 if (nextSong == null)
                 {
                     // Wait for songs to be added to the queue
-                    // Use exponential backoff to reduce log spam
-                    var waitTime = TimeSpan.FromSeconds(5);
-                    await Task.Delay(waitTime, cancellationToken);
+                    await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
                     continue;
                 }
 
@@ -122,23 +120,17 @@ public class QueuePlaybackService : IQueuePlaybackService
 
                 try
                 {
-                    // Check if the song is ready (downloaded)
-                    if (string.IsNullOrWhiteSpace(nextSong.FilePath) || !File.Exists(nextSong.FilePath))
+                    // Wait for the song to be downloaded, but don't put it back in queue
+                    await WaitForSongDownloadAsync(nextSong, cancellationToken);
+
+                    if (string.IsNullOrWhiteSpace(nextSong.FilePath))
                     {
-                        _logger.LogInformation("Song not yet downloaded, waiting: {Title}", nextSong.Title);
-                        
-                        // Put the song back at the front of the queue and wait
-                        _queueService.EnqueueSongNext(nextSong);
-                        _queueService.SetCurrentSong(null);
-                        
-                        // Wait a short time before checking again
-                        await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
-                        continue;
+                        throw new InvalidOperationException($"Song file path is null after download: {nextSong.Title}");
                     }
 
                     _logger.LogInformation("Playing song: {Title}", nextSong.Title);
                     var result = await _voiceClientController.PlayMp3Async(guild, client, nextSong.RequestedByUserId, nextSong.FilePath);
-                    _logger.LogDebug("Playback result: {Result}", result);
+                    _logger.LogDebug("Playbook result: {Result}", result);
 
                     // Wait for the song to finish playing
                     await WaitForSongCompletionAsync(cancellationToken);
@@ -159,6 +151,28 @@ public class QueuePlaybackService : IQueuePlaybackService
         {
             _logger.LogError(ex, "Unexpected error in queue processing");
         }
+    }
+
+    private async Task WaitForSongDownloadAsync(QueuedSong song, CancellationToken cancellationToken)
+    {
+        var maxWaitTime = TimeSpan.FromMinutes(2); // Max time to wait for download
+        var checkInterval = TimeSpan.FromSeconds(1);
+        var elapsed = TimeSpan.Zero;
+
+        while (elapsed < maxWaitTime && !cancellationToken.IsCancellationRequested)
+        {
+            // Check if the song is ready (downloaded)
+            if (!string.IsNullOrWhiteSpace(song.FilePath) && File.Exists(song.FilePath))
+            {
+                return; // Song is ready
+            }
+
+            await Task.Delay(checkInterval, cancellationToken);
+            elapsed = elapsed.Add(checkInterval);
+        }
+
+        // If we reach here, download timed out
+        throw new InvalidOperationException($"Song download timed out after {maxWaitTime}: {song.Title}");
     }
 
     private async Task WaitForSongCompletionAsync(CancellationToken cancellationToken)

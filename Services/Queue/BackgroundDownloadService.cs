@@ -14,6 +14,7 @@ public class BackgroundDownloadService : BackgroundService, IBackgroundDownloadS
 {
     private readonly ISongQueueService _queueService;
     private readonly IYouTubeDownloader _downloader;
+    private readonly IFollowUpMessageService _followUpMessageService;
     private readonly ILogger<BackgroundDownloadService> _logger;
     private readonly HashSet<string> _downloadingUrls = new();
     private readonly object _downloadingLock = new();
@@ -21,10 +22,12 @@ public class BackgroundDownloadService : BackgroundService, IBackgroundDownloadS
     public BackgroundDownloadService(
         ISongQueueService queueService,
         IYouTubeDownloader downloader,
+        IFollowUpMessageService followUpMessageService,
         ILogger<BackgroundDownloadService> logger)
     {
         _queueService = queueService;
         _downloader = downloader;
+        _followUpMessageService = followUpMessageService;
         _logger = logger;
     }
 
@@ -114,7 +117,7 @@ public class BackgroundDownloadService : BackgroundService, IBackgroundDownloadS
 
         try
         {
-            _logger.LogInformation("Background downloading: {Title}", song.Title);
+            _logger.LogDebug("Background downloading: {Title}", song.Title);
             
             // Update title if it's still generic
             if (song.Title == "YouTube Video" || song.Title == "Audio Track")
@@ -124,6 +127,9 @@ public class BackgroundDownloadService : BackgroundService, IBackgroundDownloadS
                 {
                     song.Title = actualTitle;
                     _logger.LogDebug("Updated title for {Url}: {Title}", song.Url, actualTitle);
+                    
+                    // Send follow-up message with real title
+                    await _followUpMessageService.SendSongTitleUpdateAsync(song.Id, actualTitle);
                 }
             }
 
@@ -131,7 +137,7 @@ public class BackgroundDownloadService : BackgroundService, IBackgroundDownloadS
             if (!string.IsNullOrWhiteSpace(filePath))
             {
                 song.FilePath = filePath;
-                _logger.LogInformation("Background download completed: {Title}", song.Title);
+                _logger.LogDebug("Background download completed: {Title}", song.Title);
             }
             else
             {
