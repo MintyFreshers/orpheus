@@ -30,21 +30,20 @@ public class WhisperTranscriptionService : ITranscriptionService, IDisposable
         {
             _logger.LogInformation("Initializing Whisper transcription service...");
             
-            // For simplicity, try to use a lightweight model or download it differently
-            // We'll use the tiny model for faster processing
+            // Use built-in model downloading from Whisper.net
             var modelPath = Path.Combine(Environment.CurrentDirectory, "Models", "ggml-tiny.bin");
             Directory.CreateDirectory(Path.GetDirectoryName(modelPath)!);
 
             if (!File.Exists(modelPath))
             {
-                _logger.LogInformation("Downloading Whisper tiny model for faster processing...");
+                _logger.LogInformation("Downloading Whisper tiny model...");
                 
-                // Use the correct static method call
+                // Create an instance of the downloader with HttpClient
                 using var httpClient = new HttpClient();
-                var modelUrl = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin";
-                var response = await httpClient.GetStreamAsync(modelUrl);
-                using var fileWriter = File.OpenWrite(modelPath);
-                await response.CopyToAsync(fileWriter);
+                var downloader = new WhisperGgmlDownloader(httpClient);
+                using var modelStream = await downloader.GetGgmlModelAsync(GgmlType.Tiny);
+                using var fileWriter = File.Create(modelPath);
+                await modelStream.CopyToAsync(fileWriter);
                 _logger.LogInformation("Model downloaded successfully");
             }
 
