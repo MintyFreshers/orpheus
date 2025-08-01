@@ -7,6 +7,7 @@ using NetCord.Hosting.Services;
 using NetCord.Hosting.Services.ApplicationCommands;
 using Orpheus.Configuration;
 using Orpheus.Services.Downloader.Youtube;
+using Orpheus.Services.Queue;
 using Orpheus.Services.VoiceClientController;
 using Orpheus.Services.WakeWord;
 using Orpheus.Utils;
@@ -59,6 +60,8 @@ internal class Program
     {
         services.AddLogging();
         services.AddSingleton<IYouTubeDownloader, YouTubeDownloaderService>();
+        services.AddSingleton<ISongQueueService, SongQueueService>();
+        services.AddSingleton<IQueuePlaybackService, QueuePlaybackService>();
         services.AddSingleton<IAudioPlaybackService, AudioPlaybackService>();
         services.AddSingleton<IVoiceClientController, VoiceClientController>();
         services.AddSingleton<IWakeWordDetectionService, PicovoiceWakeWordService>();
