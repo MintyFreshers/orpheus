@@ -3,6 +3,11 @@ namespace Orpheus.Services.Queue;
 public interface ISongQueueService
 {
     /// <summary>
+    /// Event fired when a new song is added to the queue
+    /// </summary>
+    event Action<QueuedSong>? SongAdded;
+
+    /// <summary>
     /// Adds a song to the queue
     /// </summary>
     void EnqueueSong(QueuedSong song);

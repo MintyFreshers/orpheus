@@ -8,6 +8,7 @@ public interface IBackgroundDownloadService
 {
     Task StartAsync();
     Task StopAsync();
+    Task TriggerImmediateProcessingAsync(QueuedSong song);
 }
 
 public class BackgroundDownloadService : BackgroundService, IBackgroundDownloadService
@@ -33,6 +34,9 @@ public class BackgroundDownloadService : BackgroundService, IBackgroundDownloadS
         _downloader = downloader;
         _followUpMessageService = followUpMessageService;
         _logger = logger;
+        
+        // Subscribe to song added events for immediate processing
+        _queueService.SongAdded += OnSongAdded;
     }
 
     public async Task StartAsync()
@@ -45,6 +49,36 @@ public class BackgroundDownloadService : BackgroundService, IBackgroundDownloadS
         await base.StopAsync(CancellationToken.None);
     }
 
+    public Task TriggerImmediateProcessingAsync(QueuedSong song)
+    {
+        try
+        {
+            // Process metadata immediately for newly added song
+            if (NeedsMetadata(song))
+            {
+                _ = Task.Run(async () => await FetchMetadataAsync(song, CancellationToken.None));
+            }
+            
+            // Also start download if needed (but metadata has higher priority for follow-up messages)
+            if (NeedsDownload(song))
+            {
+                _ = Task.Run(async () => await DownloadSongAsync(song, CancellationToken.None));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in immediate processing for song: {Title}", song.Title);
+        }
+        
+        return Task.CompletedTask;
+    }
+
+    private void OnSongAdded(QueuedSong song)
+    {
+        // Fire and forget immediate processing
+        _ = Task.Run(async () => await TriggerImmediateProcessingAsync(song));
+    }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation("Background download service started");
@@ -55,8 +89,8 @@ public class BackgroundDownloadService : BackgroundService, IBackgroundDownloadS
             {
                 await ProcessQueueDownloads(stoppingToken);
                 
-                // Wait before next check to avoid excessive polling
-                await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken);
+                // Wait before next check - reduced interval as immediate processing handles new songs
+                await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken);
             }
             catch (OperationCanceledException)
             {
@@ -227,6 +261,9 @@ public class BackgroundDownloadService : BackgroundService, IBackgroundDownloadS
 
     public override void Dispose()
     {
+        // Unsubscribe from events to prevent memory leaks
+        _queueService.SongAdded -= OnSongAdded;
+        
         _downloadSemaphore?.Dispose();
         _metadataSemaphore?.Dispose();
         base.Dispose();

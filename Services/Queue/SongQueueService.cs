@@ -9,6 +9,8 @@ public class SongQueueService : ISongQueueService
     private readonly ILogger<SongQueueService> _logger;
     private QueuedSong? _currentSong;
 
+    public event Action<QueuedSong>? SongAdded;
+
     public SongQueueService(ILogger<SongQueueService> logger)
     {
         _logger = logger;
@@ -55,6 +57,9 @@ public class SongQueueService : ISongQueueService
             _logger.LogInformation("Song queued: {Title} (requested by {UserId}). Queue size: {QueueSize}", 
                 song.Title, song.RequestedByUserId, _queue.Count);
         }
+        
+        // Fire event after releasing lock to avoid potential deadlocks
+        SongAdded?.Invoke(song);
     }
 
     public void EnqueueSongNext(QueuedSong song)
@@ -65,6 +70,9 @@ public class SongQueueService : ISongQueueService
             _logger.LogInformation("Song queued next: {Title} (requested by {UserId}). Queue size: {QueueSize}", 
                 song.Title, song.RequestedByUserId, _queue.Count);
         }
+        
+        // Fire event after releasing lock to avoid potential deadlocks
+        SongAdded?.Invoke(song);
     }
 
     public QueuedSong? PeekNext()
