@@ -6,13 +6,13 @@ public static class DiscordTokenProvider
 {
     public static string ResolveToken(IConfiguration configuration, out string tokenSource)
     {
-        var envToken = configuration["DISCORD_TOKEN"];
+        var environmentToken = configuration["DISCORD_TOKEN"];
         var configToken = configuration["Discord:Token"];
 
-        if (!string.IsNullOrWhiteSpace(envToken))
+        if (!string.IsNullOrWhiteSpace(environmentToken))
         {
             tokenSource = "environment variable DISCORD_TOKEN";
-            return envToken;
+            return environmentToken;
         }
 
         if (!string.IsNullOrWhiteSpace(configToken))

@@ -7,11 +7,11 @@ namespace Orpheus.Commands;
 
 public class Leave : ApplicationCommandModule<ApplicationCommandContext>
 {
-    private readonly IVoiceClientController _voiceChannelController;
+    private readonly IVoiceClientController _voiceClientController;
 
-    public Leave(IVoiceClientController voiceChannelController)
+    public Leave(IVoiceClientController voiceClientController)
     {
-        _voiceChannelController = voiceChannelController;
+        _voiceClientController = voiceClientController;
     }
 
     [SlashCommand("leave", "Leave the voice channel.", Contexts = [InteractionContextType.Guild])]
@@ -19,7 +19,7 @@ public class Leave : ApplicationCommandModule<ApplicationCommandContext>
     {
         var guild = Context.Guild!;
         var client = Context.Client;
-        var resultMessage = await _voiceChannelController.LeaveVoiceChannelAsync(guild, client);
+        var resultMessage = await _voiceClientController.LeaveVoiceChannelAsync(guild, client);
         await RespondAsync(InteractionCallback.Message(resultMessage));
     }
 }

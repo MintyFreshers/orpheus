@@ -1,5 +1,4 @@
 ﻿using NetCord.Gateway;
-using NetCord.Rest;
 
 namespace Orpheus.Services.VoiceClientController;
 

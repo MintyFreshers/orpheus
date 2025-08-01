@@ -1,5 +1,4 @@
 using NetCord;
-using NetCord.Gateway;
 using NetCord.Rest;
 using NetCord.Services.ApplicationCommands;
 using Orpheus.Services.VoiceClientController;
@@ -8,11 +7,11 @@ namespace Orpheus.Commands;
 
 public class Join : ApplicationCommandModule<ApplicationCommandContext>
 {
-    private readonly IVoiceClientController _voiceChannelController;
+    private readonly IVoiceClientController _voiceClientController;
 
-    public Join(IVoiceClientController voiceChannelController)
+    public Join(IVoiceClientController voiceClientController)
     {
-        _voiceChannelController = voiceChannelController;
+        _voiceClientController = voiceClientController;
     }
 
     [SlashCommand("join", "Join a voice channel.", Contexts = [InteractionContextType.Guild])]
@@ -21,7 +20,7 @@ public class Join : ApplicationCommandModule<ApplicationCommandContext>
         var guild = Context.Guild!;
         var client = Context.Client;
         var userId = Context.User.Id;
-        var resultMessage = await _voiceChannelController.JoinVoiceChannelOfUserAsync(guild, client, userId);
+        var resultMessage = await _voiceClientController.JoinVoiceChannelOfUserAsync(guild, client, userId);
         await RespondAsync(InteractionCallback.Message(resultMessage));
     }
 }

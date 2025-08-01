@@ -10,11 +10,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Concentus" Version="2.2.2" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.5" />
     <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.21.0" />
     <PackageReference Include="NetCord" Version="1.0.0-alpha.380" />
     <PackageReference Include="NetCord.Hosting" Version="1.0.0-alpha.380" />
     <PackageReference Include="NetCord.Hosting.Services" Version="1.0.0-alpha.380" />
+    <PackageReference Include="Porcupine" Version="3.0.10" />
     <PackageReference Include="YoutubeDLSharp" Version="1.1.2" />
   </ItemGroup>
 
@@ -26,6 +28,8 @@
 	<None Update="Resources/ExampleTrack.mp3">
 		<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	</None>
+	<None Update="Resources/orpheus_keyword_file.ppn">
+		<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	</None>
   </ItemGroup>
-
 </Project>

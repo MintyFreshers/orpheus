@@ -5,8 +5,10 @@ using Microsoft.Extensions.Logging;
 using NetCord.Hosting.Gateway;
 using NetCord.Hosting.Services;
 using NetCord.Hosting.Services.ApplicationCommands;
+using Orpheus.Configuration;
 using Orpheus.Services.Downloader.Youtube;
 using Orpheus.Services.VoiceClientController;
+using Orpheus.Services.WakeWord;
 using Orpheus.Utils;
 
 internal class Program
@@ -34,7 +36,7 @@ internal class Program
         return Host.CreateDefaultBuilder(args)
             .ConfigureAppConfiguration((hostingContext, configBuilder) =>
             {
-                configBuilder.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
+                configBuilder.AddJsonFile("Config/appsettings.json", optional: true, reloadOnChange: true);
                 configBuilder.AddEnvironmentVariables();
             })
             .ConfigureLogging(logging =>
@@ -45,18 +47,23 @@ internal class Program
                 logging.SetMinimumLevel(LogLevel.Debug);
 #endif
             })
-            .ConfigureServices((context, services) =>
-            {
-                services.AddLogging();
-                services.AddSingleton<IYouTubeDownloader, YouTubeDownloaderService>();
-                services.AddSingleton<IAudioPlaybackService, AudioPlaybackService>();
-                services.AddSingleton<IVoiceClientController, VoiceClientController>();
-            })
+            .ConfigureServices(ConfigureServices)
             .UseDiscordGateway(options =>
             {
                 options.Token = token;
             })
             .UseApplicationCommands();
+    }
+
+    private static void ConfigureServices(HostBuilderContext context, IServiceCollection services)
+    {
+        services.AddLogging();
+        services.AddSingleton<IYouTubeDownloader, YouTubeDownloaderService>();
+        services.AddSingleton<IAudioPlaybackService, AudioPlaybackService>();
+        services.AddSingleton<IVoiceClientController, VoiceClientController>();
+        services.AddSingleton<IWakeWordDetectionService, PicovoiceWakeWordService>();
+        services.AddSingleton<BotConfiguration>();
+        services.AddSingleton<WakeWordResponseHandler>();
     }
 
     private static void RegisterModules(IHost host)
