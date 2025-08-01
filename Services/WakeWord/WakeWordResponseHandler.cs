@@ -11,15 +11,18 @@ namespace Orpheus.Services.WakeWord;
 public class WakeWordResponseHandler
 {
     private const int DiscordSampleRate = 48000;
-    private const int TranscriptionTimeoutMs = 5000;
+    private const int TranscriptionTimeoutMs = 8000;
     private const int FrameLengthMs = 20;
     private const int DiscordFrameSize = DiscordSampleRate / 1000 * FrameLengthMs;
+    private const int AudioBufferDurationMs = 3000;
+    private const int MaxBufferedFrames = AudioBufferDurationMs / FrameLengthMs;
 
     private readonly ILogger<WakeWordResponseHandler> _logger;
     private readonly BotConfiguration _discordConfiguration;
     private readonly ITranscriptionService _transcriptionService;
     private readonly IVoiceCommandProcessor _voiceCommandProcessor;
     private readonly ConcurrentDictionary<ulong, UserTranscriptionSession> _activeSessions = new();
+    private readonly ConcurrentDictionary<ulong, Queue<byte[]>> _audioBuffers = new();
     private readonly IOpusDecoder _opusDecoder;
 
     public WakeWordResponseHandler(
@@ -45,28 +48,27 @@ public class WakeWordResponseHandler
 
         try
         {
-            _logger.LogInformation("Wake word detected from user {UserId}, starting transcription session", userId);
+            _logger.LogInformation("Wake word detected from user {UserId}, starting immediate transcription", userId);
 
-            await InitiateTranscriptionSessionAsync(userId, client);
-            await SendListeningResponseAsync(userId, client);
+            await InitiateTranscriptionSessionWithBufferedAudioAsync(userId, client);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to send wake word response message");
+            _logger.LogError(ex, "Failed to handle wake word detection");
         }
     }
 
     public Task ProcessAudioForTranscription(byte[] opusFrame, ulong userId)
     {
-        if (!_activeSessions.TryGetValue(userId, out var session))
-        {
-            return Task.CompletedTask;
-        }
-
         try
         {
-            var pcmAudioData = ConvertOpusFrameToPcmBytes(opusFrame);
-            session.AudioData.AddRange(pcmAudioData);
+            BufferAudioFrame(opusFrame, userId);
+
+            if (_activeSessions.TryGetValue(userId, out var session))
+            {
+                var pcmAudioData = ConvertOpusFrameToPcmBytes(opusFrame);
+                session.AudioData.AddRange(pcmAudioData);
+            }
         }
         catch (Exception ex)
         {
@@ -76,13 +78,50 @@ public class WakeWordResponseHandler
         return Task.CompletedTask;
     }
 
-    private async Task InitiateTranscriptionSessionAsync(ulong userId, GatewayClient client)
+    private async Task InitiateTranscriptionSessionWithBufferedAudioAsync(ulong userId, GatewayClient client)
     {
         var session = CreateNewTranscriptionSession(userId, client);
+        IncludeBufferedAudioInSession(session, userId);
+        
         _activeSessions[userId] = session;
 
         await ScheduleSessionTimeoutAsync(userId);
-        _logger.LogInformation("Started transcription session for user {UserId}", userId);
+        _logger.LogInformation("Started transcription session with buffered audio for user {UserId}", userId);
+    }
+
+    private void BufferAudioFrame(byte[] opusFrame, ulong userId)
+    {
+        if (!_audioBuffers.TryGetValue(userId, out var buffer))
+        {
+            buffer = new Queue<byte[]>();
+            _audioBuffers[userId] = buffer;
+        }
+
+        buffer.Enqueue(opusFrame);
+
+        while (buffer.Count > MaxBufferedFrames)
+        {
+            buffer.Dequeue();
+        }
+    }
+
+    private void IncludeBufferedAudioInSession(UserTranscriptionSession session, ulong userId)
+    {
+        if (!_audioBuffers.TryGetValue(userId, out var buffer))
+        {
+            return;
+        }
+
+        var bufferedFrameCount = buffer.Count;
+        _logger.LogInformation("Including {FrameCount} buffered audio frames in transcription session for user {UserId}", 
+            bufferedFrameCount, userId);
+
+        while (buffer.Count > 0)
+        {
+            var opusFrame = buffer.Dequeue();
+            var pcmAudioData = ConvertOpusFrameToPcmBytes(opusFrame);
+            session.AudioData.AddRange(pcmAudioData);
+        }
     }
 
     private static UserTranscriptionSession CreateNewTranscriptionSession(ulong userId, GatewayClient client)
@@ -105,13 +144,6 @@ public class WakeWordResponseHandler
         });
         
         return Task.CompletedTask;
-    }
-
-    private async Task SendListeningResponseAsync(ulong userId, GatewayClient client)
-    {
-        var channelId = _discordConfiguration.DefaultChannelId;
-        var listeningMessage = CreateListeningMessage(userId);
-        await client.Rest.SendMessageAsync(channelId, listeningMessage);
     }
 
     private async Task CompleteTranscriptionSessionAsync(ulong userId)
@@ -197,11 +229,6 @@ public class WakeWordResponseHandler
         byte[] pcmBytes = new byte[pcmSamples.Length * 2];
         Buffer.BlockCopy(pcmSamples, 0, pcmBytes, 0, pcmBytes.Length);
         return pcmBytes;
-    }
-
-    private static MessageProperties CreateListeningMessage(ulong userId)
-    {
-        return new MessageProperties().WithContent($"<@{userId}> I'm listening...");
     }
 
     private static MessageProperties CreateNoTranscriptionMessage(ulong userId)

@@ -21,14 +21,32 @@ public class VoiceCommandProcessor : IVoiceCommandProcessor
         var normalizedCommand = transcription.ToLowerInvariant().Trim();
         _logger.LogInformation("Processing voice command: '{Command}' from user {UserId}", normalizedCommand, userId);
 
-        if (IsGreetingCommand(normalizedCommand))
+        var cleanedCommand = RemoveWakeWordPrefix(normalizedCommand);
+
+        if (IsGreetingCommand(cleanedCommand))
         {
             _logger.LogInformation("Recognized greeting command from user {UserId}", userId);
             return Task.FromResult(CreateUserMentionResponse(userId, "Hello!"));
         }
 
-        _logger.LogInformation("Unrecognized command: '{Command}' from user {UserId}", normalizedCommand, userId);
+        _logger.LogInformation("Unrecognized command: '{Command}' from user {UserId}", cleanedCommand, userId);
         return Task.FromResult(CreateUserMentionResponse(userId, "I don't understand."));
+    }
+
+    private static string RemoveWakeWordPrefix(string normalizedCommand)
+    {
+        var wakeWordVariations = new[] { "orpheus", "orfeus", "orphius" };
+        
+        foreach (var wakeWord in wakeWordVariations)
+        {
+            if (normalizedCommand.StartsWith(wakeWord))
+            {
+                var commandWithoutWakeWord = normalizedCommand.Substring(wakeWord.Length).Trim();
+                return commandWithoutWakeWord;
+            }
+        }
+
+        return normalizedCommand;
     }
 
     private static bool IsGreetingCommand(string normalizedCommand)

@@ -2,32 +2,39 @@
 
 This document describes how to use the Whisper transcription feature in Orpheus.
 
+# Whisper Voice Commands
+
+This document describes how to use the Whisper transcription feature in Orpheus.
+
 ## How It Works
 
-1. **Wake Word Detection**: Say "Orpheus" to activate the bot
-2. **Voice Command**: After the bot responds "I'm listening...", you have 5 seconds to say a command
-3. **Response**: The bot will transcribe your speech and respond accordingly
+1. **Continuous Voice Command**: Say "Orpheus" followed immediately by your command (e.g., "Orpheus say hello")
+2. **Processing**: The bot will transcribe your complete sentence and respond accordingly
+3. **Response**: The bot responds with the appropriate action or message
 
 ## Supported Commands
 
-- **"say hello"** or **"say hi"** → Bot responds with "Hello!"
-- **Any other command** → Bot responds with "I don't understand."
+- **"Orpheus say hello"** or **"Orpheus say hi"** → Bot responds with "Hello!"
+- **"Orpheus" + any other command** → Bot responds with "I don't understand."
 
 ## Example Usage
 
 ```
-User: "Orpheus"
-Bot: "<@user> I'm listening..."
-User: "say hello"
+User: "Orpheus say hello"
 Bot: "<@user> Hello!"
 ```
 
 ```
-User: "Orpheus" 
-Bot: "<@user> I'm listening..."
-User: "play music"
+User: "Orpheus play music"
 Bot: "<@user> I don't understand."
 ```
+
+## Technical Details
+
+- The bot buffers the last 3 seconds of audio to capture continuous speech
+- When "Orpheus" is detected, the buffered audio plus subsequent audio is transcribed
+- Commands are processed within an 8-second window after wake word detection
+- No need to wait for a response - speak your complete command in one sentence
 
 ## Technical Requirements
 
@@ -40,7 +47,8 @@ Bot: "<@user> I don't understand."
 No additional configuration is needed. The feature uses:
 - Existing Picovoice wake word detection
 - Whisper tiny model for fast transcription
-- 5-second timeout for voice commands after wake word
+- 8-second timeout for voice commands after wake word detection
+- 3-second audio buffer to capture continuous speech
 
 ## Future Enhancements
 
