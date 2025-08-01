@@ -71,7 +71,7 @@ internal class Program
         services.AddSingleton<IWakeWordDetectionService, PicovoiceWakeWordService>();
         services.AddSingleton<BotConfiguration>();
         services.AddSingleton<WakeWordResponseHandler>();
-        services.AddSingleton<IFollowUpMessageService, FollowUpMessageService>();
+        services.AddSingleton<IMessageUpdateService, MessageUpdateService>();
     }
 
     private static void RegisterModules(IHost host)

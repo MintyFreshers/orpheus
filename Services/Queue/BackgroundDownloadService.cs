@@ -15,7 +15,7 @@ public class BackgroundDownloadService : BackgroundService, IBackgroundDownloadS
 {
     private readonly ISongQueueService _queueService;
     private readonly IYouTubeDownloader _downloader;
-    private readonly IFollowUpMessageService _followUpMessageService;
+    private readonly IMessageUpdateService _messageUpdateService;
     private readonly ILogger<BackgroundDownloadService> _logger;
     private readonly HashSet<string> _downloadingUrls = new();
     private readonly HashSet<string> _fetchingMetadataUrls = new();
@@ -27,12 +27,12 @@ public class BackgroundDownloadService : BackgroundService, IBackgroundDownloadS
     public BackgroundDownloadService(
         ISongQueueService queueService,
         IYouTubeDownloader downloader,
-        IFollowUpMessageService followUpMessageService,
+        IMessageUpdateService messageUpdateService,
         ILogger<BackgroundDownloadService> logger)
     {
         _queueService = queueService;
         _downloader = downloader;
-        _followUpMessageService = followUpMessageService;
+        _messageUpdateService = messageUpdateService;
         _logger = logger;
         
         // Subscribe to song added events for immediate processing
@@ -201,7 +201,7 @@ public class BackgroundDownloadService : BackgroundService, IBackgroundDownloadS
                 _logger.LogDebug("Updated title for {Url}: {Title}", song.Url, actualTitle);
                 
                 // Send follow-up message with real title
-                await _followUpMessageService.SendSongTitleUpdateAsync(song.Id, actualTitle);
+                await _messageUpdateService.SendSongTitleUpdateAsync(song.Id, actualTitle);
             }
         }
         catch (Exception ex)

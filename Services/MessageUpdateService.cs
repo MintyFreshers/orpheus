@@ -4,27 +4,27 @@ using NetCord.Rest;
 
 namespace Orpheus.Services;
 
-public interface IFollowUpMessageService
+public interface IMessageUpdateService
 {
-    Task RegisterInteractionForSongUpdatesAsync(ulong interactionId, ApplicationCommandInteraction interaction, string songId);
+    Task RegisterInteractionForSongUpdatesAsync(ulong interactionId, ApplicationCommandInteraction interaction, string songId, string originalMessage);
     Task SendSongTitleUpdateAsync(string songId, string actualTitle);
     void RemoveInteraction(ulong interactionId);
 }
 
-public class FollowUpMessageService : IFollowUpMessageService
+public class MessageUpdateService : IMessageUpdateService
 {
-    private readonly ILogger<FollowUpMessageService> _logger;
+    private readonly ILogger<MessageUpdateService> _logger;
     private readonly Dictionary<string, List<InteractionContext>> _songInteractionMap = new();
     private readonly object _lock = new();
 
-    public FollowUpMessageService(ILogger<FollowUpMessageService> logger)
+    public MessageUpdateService(ILogger<MessageUpdateService> logger)
     {
         _logger = logger;
     }
 
-    public async Task RegisterInteractionForSongUpdatesAsync(ulong interactionId, ApplicationCommandInteraction interaction, string songId)
+    public async Task RegisterInteractionForSongUpdatesAsync(ulong interactionId, ApplicationCommandInteraction interaction, string songId, string originalMessage)
     {
-        var context = new InteractionContext(interactionId, interaction);
+        var context = new InteractionContext(interactionId, interaction, originalMessage);
         
         lock (_lock)
         {
@@ -59,17 +59,20 @@ public class FollowUpMessageService : IFollowUpMessageService
         {
             try
             {
-                var followUpMessage = $"🎵 **{actualTitle}** has been added to the queue!";
-                await context.Interaction.SendFollowupMessageAsync(new InteractionMessageProperties
+                // Update the original message instead of sending a follow-up
+                await context.Interaction.ModifyResponseAsync(properties =>
                 {
-                    Content = followUpMessage
+                    // Replace "YouTube Video" placeholder with actual title in the original message
+                    var originalContent = context.OriginalMessage ?? string.Empty;
+                    var updatedContent = originalContent.Replace("YouTube Video", actualTitle);
+                    properties.Content = updatedContent;
                 });
                 
-                _logger.LogDebug("Sent follow-up message for song: {Title}", actualTitle);
+                _logger.LogDebug("Updated original message with real song title: {Title}", actualTitle);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to send follow-up message for interaction {InteractionId}", context.InteractionId);
+                _logger.LogError(ex, "Failed to update original message for interaction {InteractionId}", context.InteractionId);
             }
         }
     }
@@ -89,5 +92,5 @@ public class FollowUpMessageService : IFollowUpMessageService
         }
     }
 
-    private record InteractionContext(ulong InteractionId, ApplicationCommandInteraction Interaction);
+    private record InteractionContext(ulong InteractionId, ApplicationCommandInteraction Interaction, string? OriginalMessage);
 }

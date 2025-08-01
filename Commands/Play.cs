@@ -13,20 +13,20 @@ public class Play : ApplicationCommandModule<ApplicationCommandContext>
     private readonly ISongQueueService _queueService;
     private readonly IQueuePlaybackService _queuePlaybackService;
     private readonly IYouTubeDownloader _downloader;
-    private readonly IFollowUpMessageService _followUpMessageService;
+    private readonly IMessageUpdateService _messageUpdateService;
     private readonly ILogger<Play> _logger;
 
     public Play(
         ISongQueueService queueService,
         IQueuePlaybackService queuePlaybackService,
         IYouTubeDownloader downloader,
-        IFollowUpMessageService followUpMessageService,
+        IMessageUpdateService messageUpdateService,
         ILogger<Play> logger)
     {
         _queueService = queueService;
         _queuePlaybackService = queuePlaybackService;
         _downloader = downloader;
-        _followUpMessageService = followUpMessageService;
+        _messageUpdateService = messageUpdateService;
         _logger = logger;
     }
 
@@ -58,8 +58,8 @@ public class Play : ApplicationCommandModule<ApplicationCommandContext>
 
             await RespondAsync(InteractionCallback.Message(message));
 
-            // Register for follow-up messages when real title is fetched
-            await _followUpMessageService.RegisterInteractionForSongUpdatesAsync(Context.Interaction.Id, Context.Interaction, queuedSong.Id);
+            // Register for original message updates when real title is fetched
+            await _messageUpdateService.RegisterInteractionForSongUpdatesAsync(Context.Interaction.Id, Context.Interaction, queuedSong.Id, message);
 
             // Auto-start queue processing if queue was empty (first song added)
             if (wasQueueEmpty || !_queuePlaybackService.IsProcessing)
