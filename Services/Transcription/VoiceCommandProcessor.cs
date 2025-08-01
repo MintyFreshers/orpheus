@@ -15,43 +15,24 @@ public class VoiceCommandProcessor : IVoiceCommandProcessor
     {
         if (string.IsNullOrWhiteSpace(transcription))
         {
-            return Task.FromResult("I didn't hear anything.");
+            return Task.FromResult("I didn't hear anything clearly.");
         }
 
         var normalizedCommand = transcription.ToLowerInvariant().Trim();
         _logger.LogInformation("Processing voice command: '{Command}' from user {UserId}", normalizedCommand, userId);
 
-        var cleanedCommand = RemoveWakeWordPrefix(normalizedCommand);
-
-        if (IsSayCommand(cleanedCommand))
+        if (IsSayCommand(normalizedCommand))
         {
-            var contentToSay = ExtractSayCommandContent(cleanedCommand);
+            var contentToSay = ExtractSayCommandContent(normalizedCommand);
             _logger.LogInformation("Recognized say command from user {UserId}: '{Content}'", userId, contentToSay);
             return Task.FromResult(CreateUserMentionResponse(userId, contentToSay));
         }
 
-        _logger.LogInformation("Unrecognized command: '{Command}' from user {UserId}", cleanedCommand, userId);
+        _logger.LogInformation("Unrecognized command: '{Command}' from user {UserId}", normalizedCommand, userId);
         return Task.FromResult(CreateUserMentionResponse(userId, "I don't understand."));
     }
 
-    private static string RemoveWakeWordPrefix(string normalizedCommand)
-    {
-        var wakeWordVariations = new[] { 
-            "orpheus", "orfeus", "orphius", "orfius", "orpheas", "orfeas",
-            "orheus", "orfeius", "orveus", "or feus", "or pheus"
-        };
-        
-        foreach (var wakeWord in wakeWordVariations)
-        {
-            if (normalizedCommand.StartsWith(wakeWord))
-            {
-                var commandWithoutWakeWord = normalizedCommand.Substring(wakeWord.Length).Trim();
-                return commandWithoutWakeWord;
-            }
-        }
 
-        return normalizedCommand;
-    }
 
     private static bool IsSayCommand(string normalizedCommand)
     {

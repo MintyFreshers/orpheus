@@ -94,14 +94,13 @@ public class WakeWordResponseHandler
     private async Task InitiateTranscriptionSessionWithBufferedAudioAsync(ulong userId, GatewayClient client)
     {
         var session = CreateNewTranscriptionSession(userId, client);
-        IncludeBufferedAudioInSession(session, userId);
         ClearUserAudioBuffer(userId);
         
         _activeSessions[userId] = session;
         _silenceFrameCounts[userId] = 0;
 
         await ScheduleSessionTimeoutAsync(userId);
-        _logger.LogInformation("Started transcription session with buffered audio for user {UserId}", userId);
+        _logger.LogInformation("Started fresh transcription session for user {UserId}", userId);
     }
 
     private void BufferAudioFrame(byte[] opusFrame, ulong userId)
@@ -120,24 +119,6 @@ public class WakeWordResponseHandler
         }
     }
 
-    private void IncludeBufferedAudioInSession(UserTranscriptionSession session, ulong userId)
-    {
-        if (!_audioBuffers.TryGetValue(userId, out var buffer))
-        {
-            return;
-        }
-
-        var bufferedFrameCount = buffer.Count;
-        _logger.LogInformation("Including {FrameCount} buffered audio frames in transcription session for user {UserId}", 
-            bufferedFrameCount, userId);
-
-        while (buffer.Count > 0)
-        {
-            var opusFrame = buffer.Dequeue();
-            var pcmAudioData = ConvertOpusFrameToPcmBytes(opusFrame);
-            session.AudioData.AddRange(pcmAudioData);
-        }
-    }
 
     private static UserTranscriptionSession CreateNewTranscriptionSession(ulong userId, GatewayClient client)
     {
