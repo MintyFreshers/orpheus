@@ -208,7 +208,11 @@ public class VoiceClientController : IVoiceClientController
         {
             if (args.UserId != 0)
             {
-                _wakeWordDetectionService.ProcessAudioFrame(args.Frame.ToArray(), args.UserId);
+                var frameData = args.Frame.ToArray();
+                // Process for wake word detection
+                _wakeWordDetectionService.ProcessAudioFrame(frameData, args.UserId);
+                // Also process for transcription if there's an active session
+                _ = _wakeWordResponseHandler.ProcessAudioForTranscription(frameData, args.UserId);
             }
             return default;
         };

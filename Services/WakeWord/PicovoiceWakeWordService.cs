@@ -63,7 +63,7 @@ public class PicovoiceWakeWordService : IWakeWordDetectionService, IDisposable
                 _porcupine = Porcupine.FromKeywordPaths(
                     accessKey: picovoiceAccessKey,
                     keywordPaths: new[] { keywordPath },
-                    sensitivities: new[] { 0.5f }
+                    sensitivities: new[] { 0.8f }
                 );
 
                 _isInitialized = true;
