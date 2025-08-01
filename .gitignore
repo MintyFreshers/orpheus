@@ -370,3 +370,6 @@ test:.cs
 # App settings
 appsettings.json
 /PrenticesCrap
+
+# Debug audio files for voice transcription debugging
+DebugAudio/
