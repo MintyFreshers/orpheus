@@ -10,20 +10,20 @@ namespace Orpheus.Services.WakeWord;
 
 public class WakeWordResponseHandler
 {
+    private const int DiscordSampleRate = 48000;
+    private const int TranscriptionTimeoutMs = 5000;
+    private const int FrameLengthMs = 20;
+    private const int DiscordFrameSize = DiscordSampleRate / 1000 * FrameLengthMs;
+
     private readonly ILogger<WakeWordResponseHandler> _logger;
     private readonly BotConfiguration _discordConfiguration;
     private readonly ITranscriptionService _transcriptionService;
     private readonly IVoiceCommandProcessor _voiceCommandProcessor;
-    private readonly ConcurrentDictionary<ulong, UserTranscriptionSession> _transcriptionSessions = new();
+    private readonly ConcurrentDictionary<ulong, UserTranscriptionSession> _activeSessions = new();
     private readonly IOpusDecoder _opusDecoder;
-    
-    private const int DISCORD_SAMPLE_RATE = 48000;
-    private const int TRANSCRIPTION_TIMEOUT_MS = 5000; // 5 seconds to speak after wake word
-    private const int FRAME_LENGTH_MS = 20;
-    private const int DISCORD_FRAME_SIZE = DISCORD_SAMPLE_RATE / 1000 * FRAME_LENGTH_MS;
 
     public WakeWordResponseHandler(
-        ILogger<WakeWordResponseHandler> logger, 
+        ILogger<WakeWordResponseHandler> logger,
         BotConfiguration discordConfiguration,
         ITranscriptionService transcriptionService,
         IVoiceCommandProcessor voiceCommandProcessor)
@@ -32,7 +32,7 @@ public class WakeWordResponseHandler
         _discordConfiguration = discordConfiguration;
         _transcriptionService = transcriptionService;
         _voiceCommandProcessor = voiceCommandProcessor;
-        _opusDecoder = OpusCodecFactory.CreateDecoder(DISCORD_SAMPLE_RATE, 1);
+        _opusDecoder = OpusCodecFactory.CreateDecoder(DiscordSampleRate, 1);
     }
 
     public async Task HandleWakeWordDetectionAsync(ulong userId, GatewayClient? client)
@@ -45,16 +45,10 @@ public class WakeWordResponseHandler
 
         try
         {
-            var channelId = _discordConfiguration.DefaultChannelId;
-            
             _logger.LogInformation("Wake word detected from user {UserId}, starting transcription session", userId);
-            
-            // Start transcription session for this user
-            StartTranscriptionSession(userId, client);
-            
-            // Send initial response
-            var mentionMessage = CreateWakeWordResponseMessage(userId);
-            await client.Rest.SendMessageAsync(channelId, mentionMessage);
+
+            await InitiateTranscriptionSessionAsync(userId, client);
+            await SendListeningResponseAsync(userId, client);
         }
         catch (Exception ex)
         {
@@ -62,57 +56,67 @@ public class WakeWordResponseHandler
         }
     }
 
-    private void StartTranscriptionSession(ulong userId, GatewayClient client)
+    public Task ProcessAudioForTranscription(byte[] opusFrame, ulong userId)
     {
-        var session = new UserTranscriptionSession
+        if (!_activeSessions.TryGetValue(userId, out var session))
+        {
+            return Task.CompletedTask;
+        }
+
+        try
+        {
+            var pcmAudioData = ConvertOpusFrameToPcmBytes(opusFrame);
+            session.AudioData.AddRange(pcmAudioData);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error processing audio frame for transcription");
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task InitiateTranscriptionSessionAsync(ulong userId, GatewayClient client)
+    {
+        var session = CreateNewTranscriptionSession(userId, client);
+        _activeSessions[userId] = session;
+
+        await ScheduleSessionTimeoutAsync(userId);
+        _logger.LogInformation("Started transcription session for user {UserId}", userId);
+    }
+
+    private static UserTranscriptionSession CreateNewTranscriptionSession(ulong userId, GatewayClient client)
+    {
+        return new UserTranscriptionSession
         {
             UserId = userId,
             StartTime = DateTime.UtcNow,
             AudioData = new List<byte>(),
             Client = client
         };
-
-        _transcriptionSessions[userId] = session;
-
-        // Set timeout for transcription session
-        _ = Task.Run(async () =>
-        {
-            await Task.Delay(TRANSCRIPTION_TIMEOUT_MS);
-            await EndTranscriptionSession(userId);
-        });
-
-        _logger.LogInformation("Started transcription session for user {UserId}", userId);
     }
 
-    public Task ProcessAudioForTranscription(byte[] opusFrame, ulong userId)
+    private Task ScheduleSessionTimeoutAsync(ulong userId)
     {
-        if (!_transcriptionSessions.TryGetValue(userId, out var session))
+        _ = Task.Run(async () =>
         {
-            return Task.CompletedTask; // No active transcription session for this user
-        }
-
-        try
-        {
-            // Convert Opus frame to PCM
-            short[] pcmSamples = ConvertOpusFrameToPcm(opusFrame);
-            
-            // Convert to bytes and add to session buffer
-            byte[] pcmBytes = new byte[pcmSamples.Length * 2];
-            Buffer.BlockCopy(pcmSamples, 0, pcmBytes, 0, pcmBytes.Length);
-            
-            session.AudioData.AddRange(pcmBytes);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error processing audio frame for transcription");
-        }
+            await Task.Delay(TranscriptionTimeoutMs);
+            await CompleteTranscriptionSessionAsync(userId);
+        });
         
         return Task.CompletedTask;
     }
 
-    private async Task EndTranscriptionSession(ulong userId)
+    private async Task SendListeningResponseAsync(ulong userId, GatewayClient client)
     {
-        if (!_transcriptionSessions.TryRemove(userId, out var session))
+        var channelId = _discordConfiguration.DefaultChannelId;
+        var listeningMessage = CreateListeningMessage(userId);
+        await client.Rest.SendMessageAsync(channelId, listeningMessage);
+    }
+
+    private async Task CompleteTranscriptionSessionAsync(ulong userId)
+    {
+        if (!_activeSessions.TryRemove(userId, out var session))
         {
             return;
         }
@@ -123,30 +127,11 @@ public class WakeWordResponseHandler
 
             if (session.AudioData.Count > 0)
             {
-                // Transcribe the collected audio
-                var audioBytes = session.AudioData.ToArray();
-                var transcription = await _transcriptionService.TranscribeAudioAsync(audioBytes);
-
-                if (!string.IsNullOrEmpty(transcription))
-                {
-                    // Process the voice command
-                    var response = await _voiceCommandProcessor.ProcessCommandAsync(transcription, userId);
-                    
-                    // Send response to Discord
-                    var channelId = _discordConfiguration.DefaultChannelId;
-                    await session.Client.Rest.SendMessageAsync(channelId, new MessageProperties().WithContent(response));
-                }
-                else
-                {
-                    _logger.LogWarning("No transcription result for user {UserId}", userId);
-                    var channelId = _discordConfiguration.DefaultChannelId;
-                    await session.Client.Rest.SendMessageAsync(channelId, 
-                        new MessageProperties().WithContent($"<@{userId}> I didn't hear anything clearly."));
-                }
+                await ProcessCollectedAudioAsync(session);
             }
             else
             {
-                _logger.LogWarning("No audio data collected for user {UserId}", userId);
+                await SendNoAudioResponseAsync(userId, session.Client);
             }
         }
         catch (Exception ex)
@@ -155,18 +140,73 @@ public class WakeWordResponseHandler
         }
     }
 
-    private short[] ConvertOpusFrameToPcm(byte[] opusFrame)
+    private async Task ProcessCollectedAudioAsync(UserTranscriptionSession session)
     {
-        int frameSize = DISCORD_FRAME_SIZE;
+        var audioBytes = session.AudioData.ToArray();
+        var transcription = await _transcriptionService.TranscribeAudioAsync(audioBytes);
+
+        if (!string.IsNullOrEmpty(transcription))
+        {
+            await ProcessSuccessfulTranscriptionAsync(session, transcription);
+        }
+        else
+        {
+            await SendNoTranscriptionResponseAsync(session);
+        }
+    }
+
+    private async Task ProcessSuccessfulTranscriptionAsync(UserTranscriptionSession session, string transcription)
+    {
+        var response = await _voiceCommandProcessor.ProcessCommandAsync(transcription, session.UserId);
+        var channelId = _discordConfiguration.DefaultChannelId;
+        await session.Client.Rest.SendMessageAsync(channelId, new MessageProperties().WithContent(response));
+    }
+
+    private async Task SendNoTranscriptionResponseAsync(UserTranscriptionSession session)
+    {
+        _logger.LogWarning("No transcription result for user {UserId}", session.UserId);
+        var channelId = _discordConfiguration.DefaultChannelId;
+        var noTranscriptionMessage = CreateNoTranscriptionMessage(session.UserId);
+        await session.Client.Rest.SendMessageAsync(channelId, noTranscriptionMessage);
+    }
+
+    private async Task SendNoAudioResponseAsync(ulong userId, GatewayClient client)
+    {
+        _logger.LogWarning("No audio data collected for user {UserId}", userId);
+        var channelId = _discordConfiguration.DefaultChannelId;
+        var noAudioMessage = CreateNoTranscriptionMessage(userId);
+        await client.Rest.SendMessageAsync(channelId, noAudioMessage);
+    }
+
+    private byte[] ConvertOpusFrameToPcmBytes(byte[] opusFrame)
+    {
+        var pcmSamples = DecodeOpusFrameToPcmSamples(opusFrame);
+        return ConvertPcmSamplesToBytes(pcmSamples);
+    }
+
+    private short[] DecodeOpusFrameToPcmSamples(byte[] opusFrame)
+    {
+        int frameSize = DiscordFrameSize;
         short[] pcm = new short[frameSize];
         _opusDecoder.Decode(opusFrame, pcm, frameSize);
         return pcm;
     }
 
-    private MessageProperties CreateWakeWordResponseMessage(ulong userId)
+    private static byte[] ConvertPcmSamplesToBytes(short[] pcmSamples)
     {
-        return new MessageProperties()
-            .WithContent($"<@{userId}> I'm listening...");
+        byte[] pcmBytes = new byte[pcmSamples.Length * 2];
+        Buffer.BlockCopy(pcmSamples, 0, pcmBytes, 0, pcmBytes.Length);
+        return pcmBytes;
+    }
+
+    private static MessageProperties CreateListeningMessage(ulong userId)
+    {
+        return new MessageProperties().WithContent($"<@{userId}> I'm listening...");
+    }
+
+    private static MessageProperties CreateNoTranscriptionMessage(ulong userId)
+    {
+        return new MessageProperties().WithContent($"<@{userId}> I didn't hear anything clearly.");
     }
 }
 
