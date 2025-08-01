@@ -62,6 +62,9 @@ internal class Program
         services.AddSingleton<IYouTubeDownloader, YouTubeDownloaderService>();
         services.AddSingleton<ISongQueueService, SongQueueService>();
         services.AddSingleton<IQueuePlaybackService, QueuePlaybackService>();
+        services.AddSingleton<BackgroundDownloadService>();
+        services.AddSingleton<IBackgroundDownloadService>(provider => provider.GetRequiredService<BackgroundDownloadService>());
+        services.AddHostedService<BackgroundDownloadService>(provider => provider.GetRequiredService<BackgroundDownloadService>());
         services.AddSingleton<IAudioPlaybackService, AudioPlaybackService>();
         services.AddSingleton<IVoiceClientController, VoiceClientController>();
         services.AddSingleton<IWakeWordDetectionService, PicovoiceWakeWordService>();

@@ -3,6 +3,7 @@ using NetCord;
 using NetCord.Rest;
 using NetCord.Services.ApplicationCommands;
 using Orpheus.Services.Queue;
+using Orpheus.Services.Downloader.Youtube;
 
 namespace Orpheus.Commands;
 
@@ -10,15 +11,18 @@ public class Play : ApplicationCommandModule<ApplicationCommandContext>
 {
     private readonly ISongQueueService _queueService;
     private readonly IQueuePlaybackService _queuePlaybackService;
+    private readonly IYouTubeDownloader _downloader;
     private readonly ILogger<Play> _logger;
 
     public Play(
         ISongQueueService queueService,
         IQueuePlaybackService queuePlaybackService,
+        IYouTubeDownloader downloader,
         ILogger<Play> logger)
     {
         _queueService = queueService;
         _queuePlaybackService = queuePlaybackService;
+        _downloader = downloader;
         _logger = logger;
     }
 
@@ -33,8 +37,8 @@ public class Play : ApplicationCommandModule<ApplicationCommandContext>
 
         try
         {
-            // Extract title from URL for display (simplified)
-            var title = ExtractTitleFromUrl(url);
+            // Extract title from URL for display
+            var title = await ExtractTitleFromUrlAsync(url, _downloader);
             
             // Create queued song immediately without downloading
             var queuedSong = new QueuedSong(title, url, userId);
@@ -60,12 +64,17 @@ public class Play : ApplicationCommandModule<ApplicationCommandContext>
         }
     }
 
-    private static string ExtractTitleFromUrl(string url)
+    private static async Task<string> ExtractTitleFromUrlAsync(string url, IYouTubeDownloader downloader)
     {
-        // Simple extraction - in a real implementation you might want to fetch metadata
+        // Try to get the actual title from YouTube
         if (url.Contains("youtube.com") || url.Contains("youtu.be"))
         {
-            return "YouTube Video";
+            var title = await downloader.GetVideoTitleAsync(url);
+            if (!string.IsNullOrWhiteSpace(title))
+            {
+                return title;
+            }
+            return "YouTube Video"; // Fallback if title fetch fails
         }
         return "Audio Track";
     }

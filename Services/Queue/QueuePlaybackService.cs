@@ -122,24 +122,18 @@ public class QueuePlaybackService : IQueuePlaybackService
 
                 try
                 {
-                    // Download if not already downloaded
+                    // Check if the song is ready (downloaded)
                     if (string.IsNullOrWhiteSpace(nextSong.FilePath) || !File.Exists(nextSong.FilePath))
                     {
-                        _logger.LogInformation("Downloading audio for: {Title}", nextSong.Title);
-                        var filePath = await _downloader.DownloadAsync(nextSong.Url);
+                        _logger.LogInformation("Song not yet downloaded, waiting: {Title}", nextSong.Title);
                         
-                        if (!string.IsNullOrWhiteSpace(filePath))
-                        {
-                            var normalizedPath = Path.GetFullPath(filePath.Trim());
-                            nextSong.FilePath = normalizedPath;
-                        }
-
-                        if (string.IsNullOrWhiteSpace(nextSong.FilePath) || !File.Exists(nextSong.FilePath))
-                        {
-                            _logger.LogWarning("Failed to download audio for: {Title}", nextSong.Title);
-                            _queueService.SetCurrentSong(null);
-                            continue;
-                        }
+                        // Put the song back at the front of the queue and wait
+                        _queueService.EnqueueSongNext(nextSong);
+                        _queueService.SetCurrentSong(null);
+                        
+                        // Wait a short time before checking again
+                        await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+                        continue;
                     }
 
                     _logger.LogInformation("Playing song: {Title}", nextSong.Title);

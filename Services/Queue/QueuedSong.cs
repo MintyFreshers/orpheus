@@ -3,7 +3,7 @@ namespace Orpheus.Services.Queue;
 public class QueuedSong
 {
     public string Id { get; }
-    public string Title { get; }
+    public string Title { get; set; }
     public string Url { get; }
     public string? FilePath { get; set; }
     public DateTimeOffset QueuedAt { get; }
