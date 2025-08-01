@@ -18,21 +18,28 @@ public class QueuePlaybackService : IQueuePlaybackService
     private readonly ISongQueueService _queueService;
     private readonly IVoiceClientController _voiceClientController;
     private readonly IYouTubeDownloader _downloader;
+    private readonly IAudioPlaybackService _audioPlaybackService;
     private readonly ILogger<QueuePlaybackService> _logger;
     private CancellationTokenSource? _cancellationTokenSource;
     private Task? _processingTask;
     private readonly object _lock = new();
+    private TaskCompletionSource<bool>? _playbackCompletionSource;
 
     public QueuePlaybackService(
         ISongQueueService queueService,
         IVoiceClientController voiceClientController,
         IYouTubeDownloader downloader,
+        IAudioPlaybackService audioPlaybackService,
         ILogger<QueuePlaybackService> logger)
     {
         _queueService = queueService;
         _voiceClientController = voiceClientController;
         _downloader = downloader;
+        _audioPlaybackService = audioPlaybackService;
         _logger = logger;
+
+        // Subscribe to playback completion events
+        _audioPlaybackService.PlaybackCompleted += OnPlaybackCompleted;
     }
 
     public bool IsProcessing
@@ -177,23 +184,50 @@ public class QueuePlaybackService : IQueuePlaybackService
 
     private async Task WaitForSongCompletionAsync(CancellationToken cancellationToken)
     {
-        // This is a simplified approach - in a real implementation you'd want to
-        // listen for actual playback completion events from the audio service
-        // For now, we'll just wait a reasonable amount of time and check if playback was stopped
-        var checkInterval = TimeSpan.FromSeconds(1);
-        var maxWaitTime = TimeSpan.FromMinutes(10); // Max song length
-        var elapsed = TimeSpan.Zero;
-
-        while (elapsed < maxWaitTime && !cancellationToken.IsCancellationRequested)
+        // Create a new completion source for this song
+        _playbackCompletionSource = new TaskCompletionSource<bool>();
+        
+        try
         {
-            await Task.Delay(checkInterval, cancellationToken);
-            elapsed = elapsed.Add(checkInterval);
+            // Wait for either:
+            // 1. Playback to complete naturally (via event)
+            // 2. Song to be skipped/stopped (CurrentSong becomes null)
+            // 3. Cancellation
+            var checkInterval = TimeSpan.FromSeconds(1);
+            var maxWaitTime = TimeSpan.FromMinutes(10); // Max song length
+            var elapsed = TimeSpan.Zero;
 
-            // Check if the current song was cleared (indicating a skip or stop)
-            if (_queueService.CurrentSong == null)
+            while (elapsed < maxWaitTime && !cancellationToken.IsCancellationRequested)
             {
-                break;
+                // Check if playback completed
+                if (_playbackCompletionSource.Task.IsCompleted)
+                {
+                    _logger.LogDebug("Song finished playing naturally");
+                    return;
+                }
+
+                // Check if the current song was cleared (indicating a skip or stop)
+                if (_queueService.CurrentSong == null)
+                {
+                    _logger.LogDebug("Song was skipped or stopped");
+                    return;
+                }
+
+                await Task.Delay(checkInterval, cancellationToken);
+                elapsed = elapsed.Add(checkInterval);
             }
+
+            _logger.LogWarning("Song completion wait timed out after {MaxWaitTime}", maxWaitTime);
         }
+        finally
+        {
+            _playbackCompletionSource = null;
+        }
+    }
+
+    private void OnPlaybackCompleted()
+    {
+        _logger.LogDebug("Received playback completion event");
+        _playbackCompletionSource?.TrySetResult(true);
     }
 }
