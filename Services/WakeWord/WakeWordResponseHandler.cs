@@ -14,7 +14,7 @@ public class WakeWordResponseHandler
     private const int TranscriptionTimeoutMs = 8000;
     private const int FrameLengthMs = 20;
     private const int DiscordFrameSize = DiscordSampleRate / 1000 * FrameLengthMs;
-    private const int AudioBufferDurationMs = 3000;
+    private const int AudioBufferDurationMs = 1000;
     private const int MaxBufferedFrames = AudioBufferDurationMs / FrameLengthMs;
     private const int SilenceDetectionMs = 2000;
     private const int SilenceFrameThreshold = SilenceDetectionMs / FrameLengthMs;

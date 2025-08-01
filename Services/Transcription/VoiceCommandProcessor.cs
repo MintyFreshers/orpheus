@@ -23,10 +23,11 @@ public class VoiceCommandProcessor : IVoiceCommandProcessor
 
         var cleanedCommand = RemoveWakeWordPrefix(normalizedCommand);
 
-        if (IsGreetingCommand(cleanedCommand))
+        if (IsSayCommand(cleanedCommand))
         {
-            _logger.LogInformation("Recognized greeting command from user {UserId}", userId);
-            return Task.FromResult(CreateUserMentionResponse(userId, "Hello!"));
+            var contentToSay = ExtractSayCommandContent(cleanedCommand);
+            _logger.LogInformation("Recognized say command from user {UserId}: '{Content}'", userId, contentToSay);
+            return Task.FromResult(CreateUserMentionResponse(userId, contentToSay));
         }
 
         _logger.LogInformation("Unrecognized command: '{Command}' from user {UserId}", cleanedCommand, userId);
@@ -52,9 +53,14 @@ public class VoiceCommandProcessor : IVoiceCommandProcessor
         return normalizedCommand;
     }
 
-    private static bool IsGreetingCommand(string normalizedCommand)
+    private static bool IsSayCommand(string normalizedCommand)
     {
-        return normalizedCommand.Contains("say hello") || normalizedCommand.Contains("say hi");
+        return normalizedCommand.StartsWith("say ") && normalizedCommand.Length > 4;
+    }
+
+    private static string ExtractSayCommandContent(string normalizedCommand)
+    {
+        return normalizedCommand.Substring(4).Trim();
     }
 
     private static string CreateUserMentionResponse(ulong userId, string message)
