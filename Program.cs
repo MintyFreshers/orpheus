@@ -9,6 +9,7 @@ using Orpheus.Configuration;
 using Orpheus.Services.Downloader.Youtube;
 using Orpheus.Services.VoiceClientController;
 using Orpheus.Services.WakeWord;
+using Orpheus.Services.Transcription;
 using Orpheus.Utils;
 
 internal class Program
@@ -62,6 +63,8 @@ internal class Program
         services.AddSingleton<IAudioPlaybackService, AudioPlaybackService>();
         services.AddSingleton<IVoiceClientController, VoiceClientController>();
         services.AddSingleton<IWakeWordDetectionService, PicovoiceWakeWordService>();
+        services.AddSingleton<ITranscriptionService, WhisperTranscriptionService>();
+        services.AddSingleton<IVoiceCommandProcessor, VoiceCommandProcessor>();
         services.AddSingleton<BotConfiguration>();
         services.AddSingleton<WakeWordResponseHandler>();
     }
@@ -70,5 +73,9 @@ internal class Program
     {
         host.AddModules(typeof(Program).Assembly);
         host.UseGatewayEventHandlers();
+        
+        // Initialize transcription service
+        var transcriptionService = host.Services.GetRequiredService<ITranscriptionService>();
+        _ = transcriptionService.InitializeAsync();
     }
 }
