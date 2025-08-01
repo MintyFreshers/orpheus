@@ -16,6 +16,9 @@ public class WakeWordResponseHandler
     private const int DiscordFrameSize = DiscordSampleRate / 1000 * FrameLengthMs;
     private const int AudioBufferDurationMs = 3000;
     private const int MaxBufferedFrames = AudioBufferDurationMs / FrameLengthMs;
+    private const int SilenceDetectionMs = 2000;
+    private const int SilenceFrameThreshold = SilenceDetectionMs / FrameLengthMs;
+    private const short SilenceThreshold = 500;
 
     private readonly ILogger<WakeWordResponseHandler> _logger;
     private readonly BotConfiguration _discordConfiguration;
@@ -23,6 +26,7 @@ public class WakeWordResponseHandler
     private readonly IVoiceCommandProcessor _voiceCommandProcessor;
     private readonly ConcurrentDictionary<ulong, UserTranscriptionSession> _activeSessions = new();
     private readonly ConcurrentDictionary<ulong, Queue<byte[]>> _audioBuffers = new();
+    private readonly ConcurrentDictionary<ulong, int> _silenceFrameCounts = new();
     private readonly IOpusDecoder _opusDecoder;
 
     public WakeWordResponseHandler(
@@ -68,6 +72,15 @@ public class WakeWordResponseHandler
             {
                 var pcmAudioData = ConvertOpusFrameToPcmBytes(opusFrame);
                 session.AudioData.AddRange(pcmAudioData);
+
+                if (DetectSilenceInAudioFrame(pcmAudioData, userId))
+                {
+                    _ = Task.Run(async () => await CompleteTranscriptionSessionAsync(userId));
+                }
+                else
+                {
+                    _silenceFrameCounts[userId] = 0;
+                }
             }
         }
         catch (Exception ex)
@@ -82,8 +95,10 @@ public class WakeWordResponseHandler
     {
         var session = CreateNewTranscriptionSession(userId, client);
         IncludeBufferedAudioInSession(session, userId);
+        ClearUserAudioBuffer(userId);
         
         _activeSessions[userId] = session;
+        _silenceFrameCounts[userId] = 0;
 
         await ScheduleSessionTimeoutAsync(userId);
         _logger.LogInformation("Started transcription session with buffered audio for user {UserId}", userId);
@@ -156,6 +171,8 @@ public class WakeWordResponseHandler
         try
         {
             _logger.LogInformation("Ending transcription session for user {UserId}", userId);
+            
+            _silenceFrameCounts.TryRemove(userId, out _);
 
             if (session.AudioData.Count > 0)
             {
@@ -234,6 +251,44 @@ public class WakeWordResponseHandler
     private static MessageProperties CreateNoTranscriptionMessage(ulong userId)
     {
         return new MessageProperties().WithContent($"<@{userId}> I didn't hear anything clearly.");
+    }
+
+    private void ClearUserAudioBuffer(ulong userId)
+    {
+        if (_audioBuffers.TryGetValue(userId, out var buffer))
+        {
+            buffer.Clear();
+        }
+    }
+
+    private bool DetectSilenceInAudioFrame(byte[] pcmAudioData, ulong userId)
+    {
+        var audioLevel = CalculateAudioLevel(pcmAudioData);
+        
+        if (audioLevel < SilenceThreshold)
+        {
+            var currentSilenceFrames = _silenceFrameCounts.GetOrAdd(userId, 0) + 1;
+            _silenceFrameCounts[userId] = currentSilenceFrames;
+            
+            return currentSilenceFrames >= SilenceFrameThreshold;
+        }
+        
+        return false;
+    }
+
+    private static int CalculateAudioLevel(byte[] pcmAudioData)
+    {
+        if (pcmAudioData.Length < 2)
+            return 0;
+
+        long sum = 0;
+        for (int i = 0; i < pcmAudioData.Length - 1; i += 2)
+        {
+            var sample = Math.Abs(BitConverter.ToInt16(pcmAudioData, i));
+            sum += sample;
+        }
+
+        return (int)(sum / (pcmAudioData.Length / 2));
     }
 }
 

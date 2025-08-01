@@ -35,7 +35,10 @@ public class VoiceCommandProcessor : IVoiceCommandProcessor
 
     private static string RemoveWakeWordPrefix(string normalizedCommand)
     {
-        var wakeWordVariations = new[] { "orpheus", "orfeus", "orphius" };
+        var wakeWordVariations = new[] { 
+            "orpheus", "orfeus", "orphius", "orfius", "orpheas", "orfeas",
+            "orheus", "orfeius", "orveus", "or feus", "or pheus"
+        };
         
         foreach (var wakeWord in wakeWordVariations)
         {
