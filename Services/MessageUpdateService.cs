@@ -6,7 +6,7 @@ namespace Orpheus.Services;
 
 public interface IMessageUpdateService
 {
-    Task RegisterInteractionForSongUpdatesAsync(ulong interactionId, ApplicationCommandInteraction interaction, string songId, string originalMessage);
+    Task RegisterInteractionForSongUpdatesAsync(ulong interactionId, ApplicationCommandInteraction interaction, string songId, string originalMessage, bool isDeferred = false);
     Task SendSongTitleUpdateAsync(string songId, string actualTitle);
     void RemoveInteraction(ulong interactionId);
 }
@@ -22,9 +22,9 @@ public class MessageUpdateService : IMessageUpdateService
         _logger = logger;
     }
 
-    public async Task RegisterInteractionForSongUpdatesAsync(ulong interactionId, ApplicationCommandInteraction interaction, string songId, string originalMessage)
+    public async Task RegisterInteractionForSongUpdatesAsync(ulong interactionId, ApplicationCommandInteraction interaction, string songId, string originalMessage, bool isDeferred = false)
     {
-        var context = new InteractionContext(interactionId, interaction, originalMessage);
+        var context = new InteractionContext(interactionId, interaction, originalMessage, isDeferred);
         
         lock (_lock)
         {
@@ -36,7 +36,7 @@ public class MessageUpdateService : IMessageUpdateService
             _songInteractionMap[songId].Add(context);
         }
 
-        _logger.LogDebug("Registered interaction {InteractionId} for song updates: {SongId}", interactionId, songId);
+        _logger.LogDebug("Registered interaction {InteractionId} for song updates: {SongId}, deferred: {IsDeferred}", interactionId, songId, isDeferred);
         await Task.CompletedTask;
     }
 
@@ -59,20 +59,50 @@ public class MessageUpdateService : IMessageUpdateService
         {
             try
             {
-                // Update the original message instead of sending a follow-up
+                // Update the message content with actual title
+                var originalContent = context.OriginalMessage ?? string.Empty;
+                var updatedContent = originalContent;
+                
+                // Replace placeholder text with actual title
+                if (originalContent.Contains("YouTube Video"))
+                {
+                    updatedContent = originalContent.Replace("YouTube Video", actualTitle);
+                }
+                else if (originalContent.Contains("Found: "))
+                {
+                    // For search queries, replace the search term with actual title
+                    var foundIndex = originalContent.IndexOf("Found: ");
+                    if (foundIndex >= 0)
+                    {
+                        var beforeFound = originalContent.Substring(0, foundIndex + 7); // "Found: "
+                        var afterFound = originalContent.Substring(foundIndex + 7);
+                        
+                        // Find the end of the title (before "** to queue")
+                        var endIndex = afterFound.IndexOf("** to queue");
+                        if (endIndex >= 0)
+                        {
+                            var afterTitle = afterFound.Substring(endIndex);
+                            updatedContent = beforeFound + actualTitle + afterTitle;
+                        }
+                        else
+                        {
+                            // Fallback - just replace everything after "Found: "
+                            updatedContent = beforeFound + actualTitle + "** to queue and starting playback!";
+                        }
+                    }
+                }
+                
+                // Update the original response
                 await context.Interaction.ModifyResponseAsync(properties =>
                 {
-                    // Replace "YouTube Video" placeholder with actual title in the original message
-                    var originalContent = context.OriginalMessage ?? string.Empty;
-                    var updatedContent = originalContent.Replace("YouTube Video", actualTitle);
                     properties.Content = updatedContent;
                 });
                 
-                _logger.LogDebug("Updated original message with real song title: {Title}", actualTitle);
+                _logger.LogDebug("Updated message with real song title: {Title}, deferred: {IsDeferred}", actualTitle, context.IsDeferred);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to update original message for interaction {InteractionId}", context.InteractionId);
+                _logger.LogError(ex, "Failed to update message for interaction {InteractionId}: {Error}", context.InteractionId, ex.Message);
             }
         }
     }
@@ -92,5 +122,5 @@ public class MessageUpdateService : IMessageUpdateService
         }
     }
 
-    private record InteractionContext(ulong InteractionId, ApplicationCommandInteraction Interaction, string? OriginalMessage);
+    private record InteractionContext(ulong InteractionId, ApplicationCommandInteraction Interaction, string? OriginalMessage, bool IsDeferred = false);
 }

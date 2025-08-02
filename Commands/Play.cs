@@ -43,6 +43,7 @@ public class Play : ApplicationCommandModule<ApplicationCommandContext>
         {
             string? url = null;
             string placeholderTitle;
+            bool isSearchQuery = false;
             
             // Check if the input is a URL or a search query
             if (IsUrl(query))
@@ -53,15 +54,18 @@ public class Play : ApplicationCommandModule<ApplicationCommandContext>
             }
             else
             {
-                // It's a search query - search for the video
-                placeholderTitle = $"Searching for: {query}";
+                // It's a search query - respond immediately to avoid timeout
+                isSearchQuery = true;
+                await RespondAsync(InteractionCallback.Message($"🔍 Searching for: **{query}**..."));
+                
                 _logger.LogDebug("Input detected as search query: {Query}", query);
                 
                 // Search for the first result
                 url = await _downloader.SearchAndGetFirstUrlAsync(query);
                 if (url == null)
                 {
-                    await RespondAsync(InteractionCallback.Message($"No results found for: **{query}**"));
+                    await Context.Interaction.ModifyResponseAsync(properties => 
+                        properties.Content = $"❌ No results found for: **{query}**");
                     return;
                 }
                 
@@ -78,13 +82,21 @@ public class Play : ApplicationCommandModule<ApplicationCommandContext>
 
             var queuePosition = _queueService.Count;
             var message = wasQueueEmpty
-                ? $"Added **{placeholderTitle}** to queue and starting playback!" 
-                : $"Added **{placeholderTitle}** to queue (position {queuePosition})";
+                ? $"✅ Added **{placeholderTitle}** to queue and starting playback!" 
+                : $"✅ Added **{placeholderTitle}** to queue (position {queuePosition})";
 
-            await RespondAsync(InteractionCallback.Message(message));
+            // Respond differently based on whether this was a search query or direct URL
+            if (isSearchQuery)
+            {
+                await Context.Interaction.ModifyResponseAsync(properties => properties.Content = message);
+            }
+            else
+            {
+                await RespondAsync(InteractionCallback.Message(message));
+            }
 
-            // Register for original message updates when real title is fetched
-            await _messageUpdateService.RegisterInteractionForSongUpdatesAsync(Context.Interaction.Id, Context.Interaction, queuedSong.Id, message);
+            // Register for message updates when real title is fetched
+            await _messageUpdateService.RegisterInteractionForSongUpdatesAsync(Context.Interaction.Id, Context.Interaction, queuedSong.Id, message, isSearchQuery);
 
             // Auto-start queue processing if queue was empty (first song added)
             if (wasQueueEmpty || !_queuePlaybackService.IsProcessing)
@@ -95,7 +107,24 @@ public class Play : ApplicationCommandModule<ApplicationCommandContext>
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error in /play command for query: {Query}", query);
-            await RespondAsync(InteractionCallback.Message("An error occurred while adding the song to the queue."));
+            
+            // Try to respond appropriately based on interaction state
+            try
+            {
+                if (Context.Interaction.Token != null) // Simple check if interaction is still valid
+                {
+                    await Context.Interaction.ModifyResponseAsync(properties => 
+                        properties.Content = "❌ An error occurred while adding the song to the queue.");
+                }
+                else
+                {
+                    await RespondAsync(InteractionCallback.Message("❌ An error occurred while adding the song to the queue."));
+                }
+            }
+            catch (Exception responseEx)
+            {
+                _logger.LogError(responseEx, "Failed to send error response for query: {Query}", query);
+            }
         }
     }
 
