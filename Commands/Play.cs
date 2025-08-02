@@ -30,19 +30,48 @@ public class Play : ApplicationCommandModule<ApplicationCommandContext>
         _logger = logger;
     }
 
-    [SlashCommand("play", "Add a YouTube video to the queue by URL.", Contexts = [InteractionContextType.Guild])]
-    public async Task Command(string url)
+    [SlashCommand("play", "Add a YouTube video to the queue by URL or search query.", Contexts = [InteractionContextType.Guild])]
+    public async Task Command(string query)
     {
         var guild = Context.Guild!;
         var client = Context.Client;
         var userId = Context.User.Id;
 
-        _logger.LogInformation("Received /play command for URL: {Url} from user {UserId} in guild {GuildId}", url, userId, guild.Id);
+        _logger.LogInformation("Received /play command for query: {Query} from user {UserId} in guild {GuildId}", query, userId, guild.Id);
 
         try
         {
-            // Use placeholder title for immediate response to avoid Discord timeout
-            var placeholderTitle = GetPlaceholderTitle(url);
+            string? url = null;
+            string placeholderTitle;
+            bool isSearchQuery = false;
+            
+            // Check if the input is a URL or a search query
+            if (IsUrl(query))
+            {
+                url = query;
+                placeholderTitle = GetPlaceholderTitle(url);
+                _logger.LogDebug("Input detected as URL: {Url}", url);
+            }
+            else
+            {
+                // It's a search query - respond immediately to avoid timeout
+                isSearchQuery = true;
+                await RespondAsync(InteractionCallback.Message($"🔍 Searching for: **{query}**..."));
+                
+                _logger.LogDebug("Input detected as search query: {Query}", query);
+                
+                // Search for the first result
+                url = await _downloader.SearchAndGetFirstUrlAsync(query);
+                if (url == null)
+                {
+                    await Context.Interaction.ModifyResponseAsync(properties => 
+                        properties.Content = $"❌ No results found for: **{query}**");
+                    return;
+                }
+                
+                _logger.LogInformation("Search found URL: {Url} for query: {Query}", url, query);
+                placeholderTitle = $"Found: {query}"; // Will be updated with real title
+            }
             
             // Check if queue was empty before adding
             var wasQueueEmpty = _queueService.IsEmpty && _queueService.CurrentSong == null;
@@ -53,13 +82,21 @@ public class Play : ApplicationCommandModule<ApplicationCommandContext>
 
             var queuePosition = _queueService.Count;
             var message = wasQueueEmpty
-                ? $"Added **{placeholderTitle}** to queue and starting playback!" 
-                : $"Added **{placeholderTitle}** to queue (position {queuePosition})";
+                ? $"✅ Added **{placeholderTitle}** to queue and starting playback!" 
+                : $"✅ Added **{placeholderTitle}** to queue (position {queuePosition})";
 
-            await RespondAsync(InteractionCallback.Message(message));
+            // Respond differently based on whether this was a search query or direct URL
+            if (isSearchQuery)
+            {
+                await Context.Interaction.ModifyResponseAsync(properties => properties.Content = message);
+            }
+            else
+            {
+                await RespondAsync(InteractionCallback.Message(message));
+            }
 
-            // Register for original message updates when real title is fetched
-            await _messageUpdateService.RegisterInteractionForSongUpdatesAsync(Context.Interaction.Id, Context.Interaction, queuedSong.Id, message);
+            // Register for message updates when real title is fetched
+            await _messageUpdateService.RegisterInteractionForSongUpdatesAsync(Context.Interaction.Id, Context.Interaction, queuedSong.Id, message, isSearchQuery);
 
             // Auto-start queue processing if queue was empty (first song added)
             if (wasQueueEmpty || !_queuePlaybackService.IsProcessing)
@@ -69,9 +106,32 @@ public class Play : ApplicationCommandModule<ApplicationCommandContext>
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in /play command for URL: {Url}", url);
-            await RespondAsync(InteractionCallback.Message("An error occurred while adding the song to the queue."));
+            _logger.LogError(ex, "Error in /play command for query: {Query}", query);
+            
+            // Try to respond appropriately based on interaction state
+            try
+            {
+                if (Context.Interaction.Token != null) // Simple check if interaction is still valid
+                {
+                    await Context.Interaction.ModifyResponseAsync(properties => 
+                        properties.Content = "❌ An error occurred while adding the song to the queue.");
+                }
+                else
+                {
+                    await RespondAsync(InteractionCallback.Message("❌ An error occurred while adding the song to the queue."));
+                }
+            }
+            catch (Exception responseEx)
+            {
+                _logger.LogError(responseEx, "Failed to send error response for query: {Query}", query);
+            }
         }
+    }
+
+    private static bool IsUrl(string input)
+    {
+        return Uri.TryCreate(input, UriKind.Absolute, out var uri) &&
+               (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
     }
 
     private static string GetPlaceholderTitle(string url)

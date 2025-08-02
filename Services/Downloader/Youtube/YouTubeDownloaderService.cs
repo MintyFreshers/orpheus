@@ -84,6 +84,40 @@ public class YouTubeDownloaderService : IYouTubeDownloader
         }
     }
 
+    public async Task<string?> SearchAndGetFirstUrlAsync(string searchQuery)
+    {
+        _logger.LogInformation("Searching YouTube for: {SearchQuery}", searchQuery);
+        
+        try
+        {
+            // Use ytsearch: prefix to search YouTube for the query and get the first result
+            var searchUrl = $"ytsearch1:{searchQuery}";
+            var result = await _youtubeDl.RunVideoDataFetch(searchUrl);
+            
+            if (!result.Success)
+            {
+                _logger.LogWarning("Failed to search for query: {SearchQuery}. Error: {Error}", 
+                    searchQuery, string.Join(", ", result.ErrorOutput));
+                return null;
+            }
+
+            var url = result.Data?.WebpageUrl;
+            if (!string.IsNullOrWhiteSpace(url))
+            {
+                _logger.LogInformation("Found URL for search query '{SearchQuery}': {Url}", searchQuery, url);
+                return url;
+            }
+
+            _logger.LogWarning("Search completed but no URL found for query: {SearchQuery}", searchQuery);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception while searching for query: {SearchQuery}", searchQuery);
+            return null;
+        }
+    }
+
     private HashSet<string> GetExistingMp3Files()
     {
         return Directory.GetFiles(_downloadFolder, "*.mp3").ToHashSet();
