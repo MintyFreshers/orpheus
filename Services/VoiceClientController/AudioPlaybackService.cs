@@ -10,6 +10,8 @@ public class AudioPlaybackService : IAudioPlaybackService
     private Process? _currentFfmpegProcess;
     private readonly object _lock = new();
 
+    public event Action? PlaybackCompleted;
+
     public AudioPlaybackService(ILogger<AudioPlaybackService> logger)
     {
         _logger = logger;
@@ -143,6 +145,12 @@ public class AudioPlaybackService : IAudioPlaybackService
         if (ffmpeg.ExitCode != 0)
         {
             _logger.LogWarning("FFMPEG exited with non-zero code {ExitCode} for file: {FilePath}", ffmpeg.ExitCode, filePath);
+        }
+        else
+        {
+            _logger.LogInformation("FFMPEG completed successfully for file: {FilePath}", filePath);
+            // Fire the playback completed event when the song finishes naturally
+            PlaybackCompleted?.Invoke();
         }
     }
 

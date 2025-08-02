@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -6,7 +6,9 @@ using NetCord.Hosting.Gateway;
 using NetCord.Hosting.Services;
 using NetCord.Hosting.Services.ApplicationCommands;
 using Orpheus.Configuration;
+using Orpheus.Services;
 using Orpheus.Services.Downloader.Youtube;
+using Orpheus.Services.Queue;
 using Orpheus.Services.VoiceClientController;
 using Orpheus.Services.WakeWord;
 using Orpheus.Services.Transcription;
@@ -60,6 +62,11 @@ internal class Program
     {
         services.AddLogging();
         services.AddSingleton<IYouTubeDownloader, YouTubeDownloaderService>();
+        services.AddSingleton<ISongQueueService, SongQueueService>();
+        services.AddSingleton<IQueuePlaybackService, QueuePlaybackService>();
+        services.AddSingleton<BackgroundDownloadService>();
+        services.AddSingleton<IBackgroundDownloadService>(provider => provider.GetRequiredService<BackgroundDownloadService>());
+        services.AddHostedService<BackgroundDownloadService>(provider => provider.GetRequiredService<BackgroundDownloadService>());
         services.AddSingleton<IAudioPlaybackService, AudioPlaybackService>();
         services.AddSingleton<IVoiceClientController, VoiceClientController>();
         services.AddSingleton<IWakeWordDetectionService, PicovoiceWakeWordService>();
@@ -67,6 +74,7 @@ internal class Program
         services.AddSingleton<IVoiceCommandProcessor, VoiceCommandProcessor>();
         services.AddSingleton<BotConfiguration>();
         services.AddSingleton<WakeWordResponseHandler>();
+        services.AddSingleton<IMessageUpdateService, MessageUpdateService>();
     }
 
     private static void RegisterModules(IHost host)

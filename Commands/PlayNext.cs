@@ -8,20 +8,20 @@ using Orpheus.Services.Downloader.Youtube;
 
 namespace Orpheus.Commands;
 
-public class Play : ApplicationCommandModule<ApplicationCommandContext>
+public class PlayNext : ApplicationCommandModule<ApplicationCommandContext>
 {
     private readonly ISongQueueService _queueService;
     private readonly IQueuePlaybackService _queuePlaybackService;
     private readonly IYouTubeDownloader _downloader;
     private readonly IMessageUpdateService _messageUpdateService;
-    private readonly ILogger<Play> _logger;
+    private readonly ILogger<PlayNext> _logger;
 
-    public Play(
+    public PlayNext(
         ISongQueueService queueService,
         IQueuePlaybackService queuePlaybackService,
         IYouTubeDownloader downloader,
         IMessageUpdateService messageUpdateService,
-        ILogger<Play> logger)
+        ILogger<PlayNext> logger)
     {
         _queueService = queueService;
         _queuePlaybackService = queuePlaybackService;
@@ -30,14 +30,14 @@ public class Play : ApplicationCommandModule<ApplicationCommandContext>
         _logger = logger;
     }
 
-    [SlashCommand("play", "Add a YouTube video to the queue by URL.", Contexts = [InteractionContextType.Guild])]
+    [SlashCommand("playnext", "Add a YouTube video to the front of the queue (plays next).", Contexts = [InteractionContextType.Guild])]
     public async Task Command(string url)
     {
         var guild = Context.Guild!;
         var client = Context.Client;
         var userId = Context.User.Id;
 
-        _logger.LogInformation("Received /play command for URL: {Url} from user {UserId} in guild {GuildId}", url, userId, guild.Id);
+        _logger.LogInformation("Received /playnext command for URL: {Url} from user {UserId} in guild {GuildId}", url, userId, guild.Id);
 
         try
         {
@@ -47,14 +47,13 @@ public class Play : ApplicationCommandModule<ApplicationCommandContext>
             // Check if queue was empty before adding
             var wasQueueEmpty = _queueService.IsEmpty && _queueService.CurrentSong == null;
             
-            // Create queued song immediately with placeholder title
+            // Create queued song and add to front of queue
             var queuedSong = new QueuedSong(placeholderTitle, url, userId);
-            _queueService.EnqueueSong(queuedSong);
+            _queueService.EnqueueSongNext(queuedSong);
 
-            var queuePosition = _queueService.Count;
             var message = wasQueueEmpty
-                ? $"Added **{placeholderTitle}** to queue and starting playback!" 
-                : $"Added **{placeholderTitle}** to queue (position {queuePosition})";
+                ? $"Added **{placeholderTitle}** to queue and starting playback!"
+                : $"Added **{placeholderTitle}** to play next!";
 
             await RespondAsync(InteractionCallback.Message(message));
 
@@ -69,7 +68,7 @@ public class Play : ApplicationCommandModule<ApplicationCommandContext>
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in /play command for URL: {Url}", url);
+            _logger.LogError(ex, "Error in /playnext command for URL: {Url}", url);
             await RespondAsync(InteractionCallback.Message("An error occurred while adding the song to the queue."));
         }
     }

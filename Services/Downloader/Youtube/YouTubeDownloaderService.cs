@@ -52,6 +52,38 @@ public class YouTubeDownloaderService : IYouTubeDownloader
         return FindDownloadedFile(filesBefore, result, url);
     }
 
+    public async Task<string?> GetVideoTitleAsync(string url)
+    {
+        _logger.LogDebug("Getting video title for URL: {Url}", url);
+        
+        try
+        {
+            var result = await _youtubeDl.RunVideoDataFetch(url);
+            
+            if (!result.Success)
+            {
+                _logger.LogWarning("Failed to fetch video data for URL: {Url}. Error: {Error}", 
+                    url, string.Join(", ", result.ErrorOutput));
+                return null;
+            }
+
+            var title = result.Data?.Title;
+            if (!string.IsNullOrWhiteSpace(title))
+            {
+                _logger.LogDebug("Retrieved title for URL {Url}: {Title}", url, title);
+                return title;
+            }
+
+            _logger.LogWarning("Video data retrieved but title was empty for URL: {Url}", url);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception while fetching video title for URL: {Url}", url);
+            return null;
+        }
+    }
+
     private HashSet<string> GetExistingMp3Files()
     {
         return Directory.GetFiles(_downloadFolder, "*.mp3").ToHashSet();
