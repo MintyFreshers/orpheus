@@ -7,6 +7,7 @@ using NetCord.Hosting.Services;
 using NetCord.Hosting.Services.ApplicationCommands;
 using Orpheus.Configuration;
 using Orpheus.Services;
+using Orpheus.Services.Cache;
 using Orpheus.Services.Downloader.Youtube;
 using Orpheus.Services.Queue;
 using Orpheus.Services.VoiceClientController;
@@ -61,7 +62,22 @@ internal class Program
     private static void ConfigureServices(HostBuilderContext context, IServiceCollection services)
     {
         services.AddLogging();
-        services.AddSingleton<IYouTubeDownloader, YouTubeDownloaderService>();
+        
+        // Cache configuration and services
+        services.AddSingleton<CacheConfiguration>();
+        services.AddSingleton<ICacheService, Mp3CacheService>();
+        services.AddHostedService<CacheCleanupService>();
+        
+        // YouTube downloader with caching
+        services.AddSingleton<YouTubeDownloaderService>(); // Base downloader
+        services.AddSingleton<IYouTubeDownloader>(provider =>
+        {
+            var baseDownloader = provider.GetRequiredService<YouTubeDownloaderService>();
+            var cacheService = provider.GetRequiredService<ICacheService>();
+            var logger = provider.GetRequiredService<ILogger<CachedYouTubeDownloaderService>>();
+            return new CachedYouTubeDownloaderService(baseDownloader, cacheService, logger);
+        });
+        
         services.AddSingleton<ISongQueueService, SongQueueService>();
         services.AddSingleton<IQueuePlaybackService, QueuePlaybackService>();
         services.AddSingleton<BackgroundDownloadService>();
