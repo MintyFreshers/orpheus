@@ -71,14 +71,62 @@ public class CachedYouTubeDownloaderService : IYouTubeDownloader
 
     public async Task<string?> GetVideoTitleAsync(string url)
     {
-        // Delegate to base downloader for title fetching
+        var uniqueId = ExtractUniqueId(url);
+        if (!string.IsNullOrEmpty(uniqueId))
+        {
+            _logger.LogDebug("Checking cache for video title: {UniqueId}", uniqueId);
+            
+            // Check if we have cached metadata for this video
+            var cachedSong = await _cacheService.GetCachedSongAsync(uniqueId);
+            if (cachedSong != null)
+            {
+                _logger.LogDebug("Cache hit for title! Using cached title: {Title} ({UniqueId})", cachedSong.Title, uniqueId);
+                await _cacheService.UpdateLastAccessedAsync(uniqueId);
+                return cachedSong.Title;
+            }
+            
+            _logger.LogDebug("Cache miss for title {UniqueId}, fetching from source...", uniqueId);
+        }
+        
+        // Not cached or no unique ID, delegate to base downloader for title fetching
         return await _baseDownloader.GetVideoTitleAsync(url);
     }
 
     public async Task<string?> SearchAndGetFirstUrlAsync(string searchQuery)
     {
+        _logger.LogDebug("Searching for: {SearchQuery}", searchQuery);
+        
         // Delegate to base downloader for search functionality
-        return await _baseDownloader.SearchAndGetFirstUrlAsync(searchQuery);
+        var url = await _baseDownloader.SearchAndGetFirstUrlAsync(searchQuery);
+        
+        if (string.IsNullOrEmpty(url))
+        {
+            _logger.LogDebug("Search returned no results for: {SearchQuery}", searchQuery);
+            return null;
+        }
+        
+        // Check if the found URL corresponds to a cached video
+        var uniqueId = ExtractUniqueId(url);
+        if (!string.IsNullOrEmpty(uniqueId))
+        {
+            _logger.LogDebug("Search found URL {Url} with ID {UniqueId}, checking cache...", url, uniqueId);
+            var cachedSong = await _cacheService.GetCachedSongAsync(uniqueId);
+            if (cachedSong != null)
+            {
+                _logger.LogInformation("Search result for '{SearchQuery}' is already cached: {Title} ({UniqueId})", 
+                    searchQuery, cachedSong.Title, uniqueId);
+            }
+            else
+            {
+                _logger.LogDebug("Search result for '{SearchQuery}' not cached, will be downloaded: {Url}", searchQuery, url);
+            }
+        }
+        else
+        {
+            _logger.LogWarning("Could not extract unique ID from search result URL: {Url}", url);
+        }
+        
+        return url;
     }
 
     /// <summary>
