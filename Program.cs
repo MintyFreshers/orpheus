@@ -64,8 +64,25 @@ internal class Program
         services.AddLogging();
         
         // Cache configuration and services
-        services.AddSingleton<CacheConfiguration>();
-        services.AddSingleton<ICacheService, Mp3CacheService>();
+        services.Configure<CacheConfiguration>(context.Configuration.GetSection("Cache"));
+        services.AddSingleton<CacheConfiguration>(provider =>
+        {
+            var options = new CacheConfiguration();
+            context.Configuration.GetSection("Cache").Bind(options);
+            return options;
+        });
+        services.AddSingleton<ICacheService>(provider =>
+        {
+            var config = provider.GetRequiredService<CacheConfiguration>();
+            var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
+            
+            return config.StorageType switch
+            {
+                CacheStorageType.Sqlite => new SqliteMp3CacheService(config, loggerFactory.CreateLogger<SqliteMp3CacheService>()),
+                CacheStorageType.Json => new Mp3CacheService(config, loggerFactory.CreateLogger<Mp3CacheService>()),
+                _ => new SqliteMp3CacheService(config, loggerFactory.CreateLogger<SqliteMp3CacheService>())
+            };
+        });
         services.AddHostedService<CacheCleanupService>();
         
         // YouTube downloader with caching
