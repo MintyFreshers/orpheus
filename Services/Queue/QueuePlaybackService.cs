@@ -117,8 +117,8 @@ public class QueuePlaybackService : IQueuePlaybackService
                 var nextSong = _queueService.DequeueNext();
                 if (nextSong == null)
                 {
-                    // Wait for songs to be added to the queue
-                    await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
+                    // Wait for songs to be added to the queue - reduced delay for better responsiveness
+                    await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
                     continue;
                 }
 
@@ -193,7 +193,7 @@ public class QueuePlaybackService : IQueuePlaybackService
             // 1. Playback to complete naturally (via event)
             // 2. Song to be skipped/stopped (CurrentSong becomes null)
             // 3. Cancellation
-            var checkInterval = TimeSpan.FromSeconds(1);
+            var checkInterval = TimeSpan.FromMilliseconds(500); // Reduced to 500ms for better responsiveness
             var maxWaitTime = TimeSpan.FromMinutes(10); // Max song length
             var elapsed = TimeSpan.Zero;
 

@@ -19,10 +19,17 @@ public class BackgroundDownloadService : BackgroundService, IBackgroundDownloadS
     private readonly ILogger<BackgroundDownloadService> _logger;
     private readonly HashSet<string> _downloadingUrls = new();
     private readonly HashSet<string> _fetchingMetadataUrls = new();
+    private readonly Dictionary<string, int> _failedDownloadCounts = new(); // Track failed download attempts
+    private readonly Dictionary<string, DateTime> _lastFailedAttempt = new(); // Track when last failure occurred
     private readonly object _downloadingLock = new();
     private readonly object _metadataLock = new();
+    private readonly object _failedDownloadsLock = new();
     private readonly SemaphoreSlim _downloadSemaphore = new(3); // Max 3 concurrent downloads
     private readonly SemaphoreSlim _metadataSemaphore = new(5); // Max 5 concurrent metadata fetches
+
+    // Configuration for retry behavior
+    private const int MaxRetryAttempts = 3;
+    private static readonly TimeSpan RetryBackoffPeriod = TimeSpan.FromMinutes(5);
 
     public BackgroundDownloadService(
         ISongQueueService queueService,
@@ -161,7 +168,69 @@ public class BackgroundDownloadService : BackgroundService, IBackgroundDownloadS
         // Don't download if already downloading
         lock (_downloadingLock)
         {
-            return !_downloadingUrls.Contains(song.Url);
+            if (_downloadingUrls.Contains(song.Url))
+                return false;
+        }
+
+        // Don't retry downloads that have failed too many times
+        if (ShouldSkipFailedDownload(song.Url))
+            return false;
+
+        return true;
+    }
+
+    private bool ShouldSkipFailedDownload(string url)
+    {
+        lock (_failedDownloadsLock)
+        {
+            if (!_failedDownloadCounts.ContainsKey(url))
+                return false;
+
+            var failedCount = _failedDownloadCounts[url];
+            if (failedCount < MaxRetryAttempts)
+                return false;
+
+            // Check if enough time has passed since last failure to allow retry
+            if (_lastFailedAttempt.TryGetValue(url, out var lastFailure))
+            {
+                var timeSinceLastFailure = DateTime.UtcNow - lastFailure;
+                if (timeSinceLastFailure >= RetryBackoffPeriod)
+                {
+                    _logger.LogInformation("Resetting retry count for URL after backoff period: {Url}", url);
+                    _failedDownloadCounts[url] = 0;
+                    _lastFailedAttempt.Remove(url);
+                    return false;
+                }
+            }
+
+            _logger.LogDebug("Skipping download for URL that has failed {FailedCount} times: {Url}", failedCount, url);
+            return true;
+        }
+    }
+
+    private void RecordFailedDownload(string url)
+    {
+        lock (_failedDownloadsLock)
+        {
+            _failedDownloadCounts[url] = _failedDownloadCounts.GetValueOrDefault(url, 0) + 1;
+            _lastFailedAttempt[url] = DateTime.UtcNow;
+            
+            var failedCount = _failedDownloadCounts[url];
+            _logger.LogWarning("Recorded failed download attempt {FailedCount}/{MaxAttempts} for URL: {Url}", 
+                failedCount, MaxRetryAttempts, url);
+        }
+    }
+
+    private void RecordSuccessfulDownload(string url)
+    {
+        lock (_failedDownloadsLock)
+        {
+            if (_failedDownloadCounts.ContainsKey(url))
+            {
+                _logger.LogDebug("Clearing failed download history for successful download: {Url}", url);
+                _failedDownloadCounts.Remove(url);
+                _lastFailedAttempt.Remove(url);
+            }
         }
     }
 
@@ -239,15 +308,18 @@ public class BackgroundDownloadService : BackgroundService, IBackgroundDownloadS
             {
                 song.FilePath = filePath;
                 _logger.LogDebug("Background download completed: {Title}", song.Title);
+                RecordSuccessfulDownload(song.Url);
             }
             else
             {
                 _logger.LogWarning("Background download failed: {Title}", song.Title);
+                RecordFailedDownload(song.Url);
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error downloading song: {Title}", song.Title);
+            RecordFailedDownload(song.Url);
         }
         finally
         {
