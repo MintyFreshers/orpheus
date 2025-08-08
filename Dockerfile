@@ -25,11 +25,12 @@ RUN dotnet publish "./Orpheus.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p
 FROM base AS final
 WORKDIR /app
 
-# Create cache directory for persistent storage
-RUN mkdir -p /data/cache && chown -R $APP_UID:$APP_UID /data
-
 # Switch to root to install python3, ffmpeg, and latest yt-dlp via pip
 USER root
+
+# Create cache directory for persistent storage (as root)
+RUN mkdir -p /data/cache && chown -R $APP_UID:$APP_UID /data
+
 RUN apt-get update 
 RUN apt-get install -y python3 python3-pip ffmpeg python3-venv libopus0
 RUN cp /usr/lib/x86_64-linux-gnu/libopus.so.0.8.0 /usr/lib/x86_64-linux-gnu/libopus.so
