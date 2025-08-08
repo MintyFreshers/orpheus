@@ -157,13 +157,38 @@ public class AudioPlaybackService : IAudioPlaybackService
     {
         try
         {
-            // Use High priority for audio streaming to prevent choppy playback
-            ffmpeg.PriorityClass = ProcessPriorityClass.High;
-            _logger.LogInformation("Set FFMPEG process priority to {Priority}", ffmpeg.PriorityClass);
+            // Try different priority levels in order of preference
+            // Start with High for best performance, fall back to lower levels if permission denied
+            var prioritiesToTry = new[]
+            {
+                ProcessPriorityClass.High,
+                ProcessPriorityClass.AboveNormal,
+                ProcessPriorityClass.Normal
+            };
+
+            Exception? lastException = null;
+            foreach (var priority in prioritiesToTry)
+            {
+                try
+                {
+                    ffmpeg.PriorityClass = priority;
+                    _logger.LogInformation("Set FFMPEG process priority to {Priority}", priority);
+                    return; // Success, exit early
+                }
+                catch (Exception ex)
+                {
+                    lastException = ex;
+                    _logger.LogDebug("Could not set FFMPEG priority to {Priority}: {Error}", priority, ex.Message);
+                }
+            }
+
+            // If we get here, all priority attempts failed
+            _logger.LogDebug("Unable to set FFMPEG process priority (common in containerized environments): {Error}", 
+                lastException?.Message ?? "Unknown error");
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to set FFMPEG process priority");
+            _logger.LogDebug("Process priority setting failed: {Error}", ex.Message);
         }
     }
 
