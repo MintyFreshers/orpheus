@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using Orpheus.Services.Cache;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -16,10 +17,14 @@ public class YouTubeDownloaderService : IYouTubeDownloader
 
     public YouTubeDownloaderService(
         ILogger<YouTubeDownloaderService> logger,
-        ILogger<VerboseYoutubeDL> verboseLogger)
+        ILogger<VerboseYoutubeDL> verboseLogger,
+        CacheConfiguration cacheConfig)
     {
         _logger = logger;
-        _downloadFolder = Path.Combine(Directory.GetCurrentDirectory(), "Downloads");
+        
+        // Use the configured cache directory for downloads
+        _downloadFolder = cacheConfig.CacheDirectory;
+        _logger.LogDebug("Using configured cache directory for downloads: {DownloadFolder}", _downloadFolder);
         
         Directory.CreateDirectory(_downloadFolder);
         
@@ -32,7 +37,7 @@ public class YouTubeDownloaderService : IYouTubeDownloader
 #endif
         
         _youtubeDl.OutputFolder = _downloadFolder;
-        _logger.LogDebug("Download folder set to: {DownloadFolder}", _downloadFolder);
+        _logger.LogInformation("Download folder set to: {DownloadFolder}", _downloadFolder);
         
         LogBinaryPaths();
     }

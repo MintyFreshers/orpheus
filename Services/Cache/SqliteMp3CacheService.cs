@@ -18,9 +18,12 @@ public class SqliteMp3CacheService : ICacheService, IDisposable
         _logger = logger;
         
         // Ensure cache directory exists
+        _logger.LogDebug("Creating cache directory: {CacheDirectory}", _config.CacheDirectory);
         Directory.CreateDirectory(_config.CacheDirectory);
+        _logger.LogInformation("Cache directory ensured: {CacheDirectory}", _config.CacheDirectory);
         
         _databasePath = Path.Combine(_config.CacheDirectory, "cache.db");
+        _logger.LogDebug("SQLite database path: {DatabasePath}", _databasePath);
         _connection = new SqliteConnection($"Data Source={_databasePath}");
         
         _ = Task.Run(InitializeDatabaseAsync);

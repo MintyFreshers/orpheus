@@ -116,18 +116,20 @@ public class AudioPlaybackService : IAudioPlaybackService
         };
 
         var arguments = startInfo.ArgumentList;
-        arguments.Add("-i");
-        arguments.Add(filePath);
+        
+        // Input options must come BEFORE -i and the input file
         arguments.Add("-loglevel");
         arguments.Add("error");
-        
-        // Audio streaming optimizations
         arguments.Add("-threads");
         arguments.Add("2"); // Use multiple threads for decoding
         arguments.Add("-thread_queue_size");
         arguments.Add("1024"); // Increase thread queue size for smoother streaming
         
-        // Output format settings
+        // Input file specification
+        arguments.Add("-i");
+        arguments.Add(filePath);
+        
+        // Output format settings (these come after the input)
         arguments.Add("-ac");
         arguments.Add("2");
         arguments.Add("-f");

@@ -55,19 +55,40 @@ internal class Program
         }
         
         // Create default config in /data if it doesn't exist and we have the example
-        if (Directory.Exists("/data") && File.Exists(exampleConfigPath))
+        if (Directory.Exists("/data"))
         {
-            try
+            Console.WriteLine($"[Config] /data directory exists, checking for example config...");
+            
+            if (File.Exists(exampleConfigPath))
             {
-                File.Copy(exampleConfigPath, dataConfigPath);
-                Console.WriteLine($"[Config] Created default configuration at: {dataConfigPath}");
-                Console.WriteLine("[Config] Please edit /data/appsettings.json with your Discord token and other settings");
-                return dataConfigPath;
+                try
+                {
+                    Console.WriteLine($"[Config] Copying {exampleConfigPath} to {dataConfigPath}...");
+                    
+                    // Ensure we can write to /data directory
+                    var testFile = "/data/.write_test";
+                    File.WriteAllText(testFile, "test");
+                    File.Delete(testFile);
+                    
+                    File.Copy(exampleConfigPath, dataConfigPath);
+                    Console.WriteLine($"[Config] Successfully created default configuration at: {dataConfigPath}");
+                    Console.WriteLine("[Config] Please edit /data/appsettings.json with your Discord token and other settings");
+                    return dataConfigPath;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Config] Error: Could not create default config at {dataConfigPath}: {ex.Message}");
+                    Console.WriteLine($"[Config] Exception type: {ex.GetType().Name}");
+                }
             }
-            catch (Exception ex)
+            else
             {
-                Console.WriteLine($"[Config] Warning: Could not create default config at {dataConfigPath}: {ex.Message}");
+                Console.WriteLine($"[Config] Warning: Example config file not found at {exampleConfigPath}");
             }
+        }
+        else
+        {
+            Console.WriteLine("[Config] /data directory does not exist, using local config");
         }
         
         // Fall back to local config path
