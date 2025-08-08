@@ -26,6 +26,17 @@ public class AudioPlaybackService : IAudioPlaybackService
 
         await Task.Run(async () =>
         {
+            // Set high priority for audio streaming thread
+            try
+            {
+                Thread.CurrentThread.Priority = ThreadPriority.AboveNormal;
+                _logger.LogDebug("Set audio streaming thread priority to AboveNormal");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to set streaming thread priority");
+            }
+
             _logger.LogDebug("Preparing to start FFMPEG for file: {FilePath}", filePath);
 
             var startInfo = CreateFfmpegProcessStartInfo(filePath);
@@ -45,7 +56,9 @@ public class AudioPlaybackService : IAudioPlaybackService
 
                 var stderrTask = ffmpeg.StandardError.ReadToEndAsync();
 
-                await ffmpeg.StandardOutput.BaseStream.CopyToAsync(outputStream, cancellationToken);
+                // Use larger buffer size for smoother streaming (64KB instead of default 4KB)
+                var bufferSize = 65536;
+                await ffmpeg.StandardOutput.BaseStream.CopyToAsync(outputStream, bufferSize, cancellationToken);
                 await outputStream.FlushAsync(cancellationToken);
 
                 _logger.LogInformation("Finished streaming audio for file: {FilePath}", filePath);
@@ -107,12 +120,31 @@ public class AudioPlaybackService : IAudioPlaybackService
         arguments.Add(filePath);
         arguments.Add("-loglevel");
         arguments.Add("error");
+        
+        // Audio streaming optimizations
+        arguments.Add("-threads");
+        arguments.Add("2"); // Use multiple threads for decoding
+        arguments.Add("-thread_queue_size");
+        arguments.Add("1024"); // Increase thread queue size for smoother streaming
+        
+        // Output format settings
         arguments.Add("-ac");
         arguments.Add("2");
         arguments.Add("-f");
         arguments.Add("s16le");
         arguments.Add("-ar");
         arguments.Add("48000");
+        
+        // Buffering and streaming optimizations
+        arguments.Add("-fflags");
+        arguments.Add("+flush_packets"); // Flush packets immediately for real-time streaming
+        arguments.Add("-flags");
+        arguments.Add("low_delay"); // Minimize delay for real-time audio
+        arguments.Add("-probesize");
+        arguments.Add("32"); // Smaller probe size for faster startup
+        arguments.Add("-analyzeduration");
+        arguments.Add("0"); // Skip analysis for faster startup
+        
         arguments.Add("pipe:1");
 
         _logger.LogInformation("FFMPEG command: ffmpeg {Args}", string.Join(" ", arguments));
@@ -125,7 +157,8 @@ public class AudioPlaybackService : IAudioPlaybackService
     {
         try
         {
-            ffmpeg.PriorityClass = ProcessPriorityClass.AboveNormal;
+            // Use High priority for audio streaming to prevent choppy playback
+            ffmpeg.PriorityClass = ProcessPriorityClass.High;
             _logger.LogInformation("Set FFMPEG process priority to {Priority}", ffmpeg.PriorityClass);
         }
         catch (Exception ex)

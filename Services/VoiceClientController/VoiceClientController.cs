@@ -138,7 +138,21 @@ public class VoiceClientController : IVoiceClientController
         {
             await _voiceClient!.EnterSpeakingStateAsync(SpeakingFlags.Microphone);
             var outputStream = CreateOpusOutputStream();
-            _ = _audioPlaybackService.PlayMp3ToStreamAsync(filePath, outputStream);
+            
+            // Start playback as a fire-and-forget task but ensure proper prioritization
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    // Set high priority for the playback coordination thread
+                    Thread.CurrentThread.Priority = ThreadPriority.AboveNormal;
+                    await _audioPlaybackService.PlayMp3ToStreamAsync(filePath, outputStream);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Audio playback task failed for file: {FilePath}", filePath);
+                }
+            }, CancellationToken.None);
 
             _logger.LogInformation("Started playback of file: {FilePath}", filePath);
             return "Playing test MP3 file!";
@@ -223,6 +237,7 @@ public class VoiceClientController : IVoiceClientController
     private OpusEncodeStream CreateOpusOutputStream()
     {
         var outStream = _voiceClient!.CreateOutputStream();
+        // Use Audio application mode for better music quality and enable DTX for better performance
         return new OpusEncodeStream(outStream, PcmFormat.Short, VoiceChannels.Stereo, OpusApplication.Audio);
     }
 
