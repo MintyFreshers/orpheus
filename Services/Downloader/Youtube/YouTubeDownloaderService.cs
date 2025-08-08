@@ -104,30 +104,54 @@ public class YouTubeDownloaderService : IYouTubeDownloader
                 return null;
             }
 
-            // Log more details about the result
-            _logger.LogDebug("Search successful for '{SearchQuery}'. Data present: {HasData}, WebpageUrl: {WebpageUrl}, Id: {Id}", 
-                searchQuery, 
-                result.Data != null, 
-                result.Data?.WebpageUrl ?? "null",
-                result.Data?.ID ?? "null");
+            // Enhanced logging to debug the search result data
+            _logger.LogInformation("Search result for '{SearchQuery}': Success={Success}, HasData={HasData}", 
+                searchQuery, result.Success, result.Data != null);
+            
+            if (result.Data != null)
+            {
+                _logger.LogInformation("Search result data - WebpageUrl: {WebpageUrl}, Id: {Id}, Title: {Title}", 
+                    result.Data.WebpageUrl ?? "null",
+                    result.Data.ID ?? "null", 
+                    result.Data.Title ?? "null");
+            }
 
-            // Construct YouTube URL from video ID if available
+            // Construct YouTube URL from video ID if available - with validation
             if (!string.IsNullOrWhiteSpace(result.Data?.ID))
             {
-                var constructedUrl = $"https://www.youtube.com/watch?v={result.Data.ID}";
-                _logger.LogInformation("Constructed YouTube URL from video ID for search query '{SearchQuery}': {Url}", searchQuery, constructedUrl);
-                return constructedUrl;
+                var videoId = result.Data.ID.Trim();
+                
+                // Validate video ID format (YouTube video IDs are typically 11 characters, alphanumeric + - _)
+                if (videoId.Length == 11 && videoId.All(c => char.IsLetterOrDigit(c) || c == '-' || c == '_'))
+                {
+                    var constructedUrl = $"https://www.youtube.com/watch?v={videoId}";
+                    _logger.LogInformation("✅ Constructed valid YouTube URL from video ID for '{SearchQuery}': {Url}", searchQuery, constructedUrl);
+                    return constructedUrl;
+                }
+                else
+                {
+                    _logger.LogWarning("⚠️ Invalid video ID format '{VideoId}' for search query '{SearchQuery}' - length: {Length}", 
+                        videoId, searchQuery, videoId.Length);
+                }
             }
 
-            var url = result.Data?.WebpageUrl;
-            if (!string.IsNullOrWhiteSpace(url))
+            // Fallback to WebpageUrl if video ID construction failed
+            var webpageUrl = result.Data?.WebpageUrl?.Trim();
+            if (!string.IsNullOrWhiteSpace(webpageUrl))
             {
-                _logger.LogInformation("Found URL for search query '{SearchQuery}': {Url}", searchQuery, url);
-                return url;
+                // Validate that it's actually a YouTube URL
+                if (webpageUrl.Contains("youtube.com/watch") || webpageUrl.Contains("youtu.be/"))
+                {
+                    _logger.LogInformation("✅ Using WebpageUrl for search query '{SearchQuery}': {Url}", searchQuery, webpageUrl);
+                    return webpageUrl;
+                }
+                else
+                {
+                    _logger.LogWarning("⚠️ WebpageUrl is not a valid YouTube URL for search query '{SearchQuery}': {Url}", searchQuery, webpageUrl);
+                }
             }
 
-            _logger.LogWarning("Search completed but no valid URL found for query: {SearchQuery}. WebpageUrl: {WebpageUrl}, Id: {Id}", 
-                searchQuery, result.Data?.WebpageUrl ?? "null", result.Data?.ID ?? "null");
+            _logger.LogError("❌ No valid YouTube URL found for search query '{SearchQuery}' - both video ID and WebpageUrl were invalid or missing", searchQuery);
             return null;
         }
         catch (Exception ex)
