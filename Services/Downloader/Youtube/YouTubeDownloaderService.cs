@@ -92,6 +92,9 @@ public class YouTubeDownloaderService : IYouTubeDownloader
         {
             // Use ytsearch: prefix to search YouTube for the query and get the first result
             var searchUrl = $"ytsearch1:{searchQuery}";
+            _logger.LogDebug("Using search URL: {SearchUrl}", searchUrl);
+            
+            // Try to get video info first
             var result = await _youtubeDl.RunVideoDataFetch(searchUrl);
             
             if (!result.Success)
@@ -101,6 +104,21 @@ public class YouTubeDownloaderService : IYouTubeDownloader
                 return null;
             }
 
+            // Log more details about the result
+            _logger.LogDebug("Search successful for '{SearchQuery}'. Data present: {HasData}, WebpageUrl: {WebpageUrl}, Id: {Id}", 
+                searchQuery, 
+                result.Data != null, 
+                result.Data?.WebpageUrl ?? "null",
+                result.Data?.ID ?? "null");
+
+            // Construct YouTube URL from video ID if available
+            if (!string.IsNullOrWhiteSpace(result.Data?.ID))
+            {
+                var constructedUrl = $"https://www.youtube.com/watch?v={result.Data.ID}";
+                _logger.LogInformation("Constructed YouTube URL from video ID for search query '{SearchQuery}': {Url}", searchQuery, constructedUrl);
+                return constructedUrl;
+            }
+
             var url = result.Data?.WebpageUrl;
             if (!string.IsNullOrWhiteSpace(url))
             {
@@ -108,7 +126,8 @@ public class YouTubeDownloaderService : IYouTubeDownloader
                 return url;
             }
 
-            _logger.LogWarning("Search completed but no URL found for query: {SearchQuery}", searchQuery);
+            _logger.LogWarning("Search completed but no valid URL found for query: {SearchQuery}. WebpageUrl: {WebpageUrl}, Id: {Id}", 
+                searchQuery, result.Data?.WebpageUrl ?? "null", result.Data?.ID ?? "null");
             return null;
         }
         catch (Exception ex)

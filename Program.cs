@@ -30,9 +30,49 @@ internal class Program
     private static IConfiguration BuildConfiguration()
     {
         return new ConfigurationBuilder()
-            .AddJsonFile("Config/appsettings.json", optional: true, reloadOnChange: true)
+            .AddJsonFile(GetConfigurationPath(), optional: true, reloadOnChange: true)
             .AddEnvironmentVariables()
             .Build();
+    }
+
+    private static string GetConfigurationPath()
+    {
+        // Priority order: /data/appsettings.json -> Config/appsettings.json -> create default in /data
+        const string dataConfigPath = "/data/appsettings.json";
+        const string localConfigPath = "Config/appsettings.json";
+        const string exampleConfigPath = "Config/appsettings.example.json";
+        
+        if (File.Exists(dataConfigPath))
+        {
+            Console.WriteLine($"[Config] Using configuration from: {dataConfigPath}");
+            return dataConfigPath;
+        }
+        
+        if (File.Exists(localConfigPath))
+        {
+            Console.WriteLine($"[Config] Using configuration from: {localConfigPath}");
+            return localConfigPath;
+        }
+        
+        // Create default config in /data if it doesn't exist and we have the example
+        if (Directory.Exists("/data") && File.Exists(exampleConfigPath))
+        {
+            try
+            {
+                File.Copy(exampleConfigPath, dataConfigPath);
+                Console.WriteLine($"[Config] Created default configuration at: {dataConfigPath}");
+                Console.WriteLine("[Config] Please edit /data/appsettings.json with your Discord token and other settings");
+                return dataConfigPath;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Config] Warning: Could not create default config at {dataConfigPath}: {ex.Message}");
+            }
+        }
+        
+        // Fall back to local config path
+        Console.WriteLine($"[Config] Using configuration from: {localConfigPath} (fallback)");
+        return localConfigPath;
     }
 
     private static IHostBuilder CreateHostBuilder(string[] args, string token)
@@ -40,7 +80,8 @@ internal class Program
         return Host.CreateDefaultBuilder(args)
             .ConfigureAppConfiguration((hostingContext, configBuilder) =>
             {
-                configBuilder.AddJsonFile("Config/appsettings.json", optional: true, reloadOnChange: true);
+                var configPath = GetConfigurationPath();
+                configBuilder.AddJsonFile(configPath, optional: true, reloadOnChange: true);
                 configBuilder.AddEnvironmentVariables();
             })
             .ConfigureLogging(logging =>
